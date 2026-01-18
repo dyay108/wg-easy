@@ -304,6 +304,8 @@
     "noRules": "No ACL rules configured",
     "noRulesHint": "Click 'Add Rule' to create your first access control rule",
     "enableRule": "Enable this rule",
-    "portsHint": "Examples: 22,80,443 or 1-65535 or 8000-9000"
+    "portsHint": "Examples: 22,80,443 or 1-65535 or 8000-9000",
+    "selectClient": "Select Client",
+    "noClients": "No clients available"
   }
 }
