@@ -113,7 +113,7 @@
         <h3 class="mb-6 text-xl font-bold text-gray-900 dark:text-neutral-200">
           {{ editingRule ? $t('acl.editRule') : $t('acl.createRule') }}
         </h3>
-        <FormElement class="space-y-6" @submit.prevent="submitRule">
+        <FormElement ref="formElement" class="space-y-6" @submit.prevent="submitRule">
           <FormGroup>
             <label for="sourceCidr" class="mb-2 block text-sm font-medium text-gray-700 dark:text-neutral-300">
               {{ $t('acl.source') }}
@@ -202,10 +202,16 @@
           </FormGroup>
           <FormGroup>
             <div class="col-span-2 flex gap-2">
-              <FormPrimaryActionField
-                type="submit"
-                :label="editingRule ? $t('form.update') : $t('form.create')"
-              />
+              <div class="relative flex-1">
+                <FormPrimaryActionField
+                  type="submit"
+                  :label="editingRule ? $t('form.update') : $t('form.create')"
+                  :disabled="!isFormValid"
+                />
+                <BaseTooltip v-if="!isFormValid" :text="validationMessage">
+                  <div class="absolute inset-0 cursor-not-allowed" />
+                </BaseTooltip>
+              </div>
               <FormSecondaryActionField
                 type="button"
                 :label="$t('form.cancel')"
@@ -274,6 +280,7 @@ const showCreateModal = ref(false);
 const editingRule = ref<AclRuleType | null>(null);
 const showSourceClientPicker = ref(false);
 const showDestClientPicker = ref(false);
+const formElement = ref<HTMLFormElement | null>(null);
 
 const ruleForm = ref({
   interfaceId: 'wg0',
@@ -283,6 +290,24 @@ const ruleForm = ref({
   ports: '',
   description: '',
   enabled: true,
+});
+
+const isFormValid = computed(() => {
+  if (!ruleForm.value.sourceCidr || !ruleForm.value.destinationCidr) {
+    return false;
+  }
+  if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports) {
+    return false;
+  }
+  return true;
+});
+
+const validationMessage = computed(() => {
+  const missing = [];
+  if (!ruleForm.value.sourceCidr) missing.push('Source CIDR');
+  if (!ruleForm.value.destinationCidr) missing.push('Destination CIDR');
+  if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports) missing.push('Ports');
+  return `Please fill in: ${missing.join(', ')}`;
 });
 
 function getClientNameByCidr(cidr: string): string | null {
@@ -321,6 +346,13 @@ async function submitConfigHandler() {
 }
 
 async function submitRule() {
+  // Check form validity before submitting
+  const form = formElement.value?.$el as HTMLFormElement;
+  if (form && !form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
+
   const data = { ...ruleForm.value };
   
   // Clear ports for ICMP
@@ -328,22 +360,27 @@ async function submitRule() {
     data.ports = '';
   }
 
-  if (editingRule.value) {
-    await useSubmit(
-      `/api/admin/acl/rules/${editingRule.value.id}`,
-      { method: 'post' },
-      { revert: async () => { await refreshRules(); } }
-    )(data);
-  } else {
-    await useSubmit(
-      '/api/admin/acl/rules',
-      { method: 'post' },
-      { revert: async () => { await refreshRules(); } }
-    )(data);
-  }
+  try {
+    if (editingRule.value) {
+      await useSubmit(
+        `/api/admin/acl/rules/${editingRule.value.id}`,
+        { method: 'post' },
+        { revert: async () => { await refreshRules(); } }
+      )(data);
+    } else {
+      await useSubmit(
+        '/api/admin/acl/rules',
+        { method: 'post' },
+        { revert: async () => { await refreshRules(); } }
+      )(data);
+    }
 
-  await refreshRules();
-  closeModal();
+    await refreshRules();
+    closeModal();
+  } catch (error) {
+    // Don't close modal on error
+    console.error('Failed to save rule:', error);
+  }
 }
 
 function editRule(rule: AclRuleType) {
