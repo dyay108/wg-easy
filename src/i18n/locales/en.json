@@ -7,7 +7,8 @@
       "general": "General",
       "config": "Config",
       "interface": "Interface",
-      "hooks": "Hooks"
+      "hooks": "Hooks",
+      "acl": "Access Control"
     }
   },
   "user": {
@@ -282,5 +283,27 @@
     "h4Description": "Transport packet header value (5-2147483647, must be unique from H1-H3)",
     "mtuNote": "Values depend on the MTU",
     "obfuscationParameters": "AmneziaWG Obfuscation Parameters"
+  },
+  "acl": {
+    "configuration": "ACL Configuration",
+    "enableACL": "Enable Access Control Lists",
+    "enableDescription": "When enabled, peer-to-peer traffic will be filtered according to the rules below. All traffic is denied by default.",
+    "rules": "ACL Rules",
+    "addRule": "Add Rule",
+    "createRule": "Create ACL Rule",
+    "editRule": "Edit ACL Rule",
+    "source": "Source CIDR",
+    "destination": "Destination CIDR",
+    "protocol": "Protocol",
+    "ports": "Ports",
+    "description": "Description",
+    "enabled": "Enabled",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "noRules": "No ACL rules configured",
+    "noRulesHint": "Click 'Add Rule' to create your first access control rule",
+    "enableRule": "Enable this rule",
+    "portsHint": "Examples: 22,80,443 or 1-65535 or 8000-9000"
   }
 }

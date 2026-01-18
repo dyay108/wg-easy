@@ -2,11 +2,11 @@
 
 // ! Auto Imports are not supported in this file
 
-import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import { defineCommand, runMain } from 'citty';
 import { consola } from 'consola';
 import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/libsql';
 
 import packageJson from '../package.json';
 import * as schema from '../server/database/schema';

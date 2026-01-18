@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import debug from 'debug';
 import { encodeQR } from 'qr';
+import { generatePostUpScript, generatePreDownScript, applyAclRules } from './aclHelper';
 import type { InterfaceType } from '#db/repositories/interface/types';
 
 const WG_DEBUG = debug('WireGuard');
@@ -16,6 +17,9 @@ class WireGuard {
     const wgInterface = await Database.interfaces.get();
     await this.#saveWireguardConfig(wgInterface);
     await this.#syncWireguardConfig(wgInterface);
+    
+    // Apply ACL rules immediately after syncing config
+    await applyAclRules();
   }
 
   /**
@@ -27,9 +31,66 @@ class WireGuard {
     const clients = await Database.clients.getAll();
     const hooks = await Database.hooks.get();
 
+    // Check if ACL is enabled
+    const aclConfig = await Database.acl.getConfig(wgInterface.name);
+    const aclEnabled = aclConfig.enabled;
+
+    // Generate ACL scripts and inject into hooks
+    const aclPostUp = await generatePostUpScript(
+      wgInterface.name,
+      wgInterface.ipv4Cidr
+    );
+    const aclPreDown = await generatePreDownScript(
+      wgInterface.name
+    );
+
+    // Split hook strings into arrays of commands (one per line)
+    const postUpCommands = hooks.postUp.split('\n').filter(cmd => cmd.trim());
+    const postDownCommands = hooks.postDown.split('\n').filter(cmd => cmd.trim());
+    
+    // If ACL is enabled, remove blanket FORWARD ACCEPT rules that would bypass ACL
+    if (aclEnabled) {
+      const forwardAcceptPattern = /iptables.*-A FORWARD.*-[io] wg0.*-j ACCEPT/;
+      postUpCommands.forEach((cmd, idx) => {
+        if (forwardAcceptPattern.test(cmd)) {
+          // Remove the FORWARD ACCEPT rules from this command
+          postUpCommands[idx] = cmd
+            .split(';')
+            .map(c => c.trim())
+            .filter(c => !forwardAcceptPattern.test(c))
+            .join('; ');
+        }
+      });
+      postDownCommands.forEach((cmd, idx) => {
+        if (forwardAcceptPattern.test(cmd)) {
+          // Remove the FORWARD ACCEPT rules from this command
+          postDownCommands[idx] = cmd
+            .split(';')
+            .map(c => c.trim())
+            .filter(c => !forwardAcceptPattern.test(c))
+            .join('; ');
+        }
+      });
+    }
+    
+    // Add ACL commands
+    if (aclPostUp) postUpCommands.push(aclPostUp);
+    
+    const preDownCommands = [];
+    if (aclPreDown) preDownCommands.push(aclPreDown);
+    preDownCommands.push(...hooks.preDown.split('\n').filter(cmd => cmd.trim()));
+
+    // Combine back to strings with newlines, filtering out empty commands
+    const enhancedHooks = {
+      ...hooks,
+      postUp: postUpCommands.filter(cmd => cmd.trim()).join('\n'),
+      preDown: preDownCommands.filter(cmd => cmd.trim()).join('\n'),
+      postDown: postDownCommands.filter(cmd => cmd.trim()).join('\n'),
+    };
+
     const result = [];
     result.push(
-      wg.generateServerInterface(wgInterface, hooks, {
+      wg.generateServerInterface(wgInterface, enhancedHooks, {
         enableIpv6: !WG_ENV.DISABLE_IPV6,
       })
     );
