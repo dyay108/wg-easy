@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import debug from 'debug';
 import { encodeQR } from 'qr';
 import { generatePostUpScript, generatePreDownScript, applyAclRules } from './aclHelper';
+import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes } from './egressHelper';
 import type { InterfaceType } from '#db/repositories/interface/types';
 
 const WG_DEBUG = debug('WireGuard');
@@ -15,11 +16,38 @@ class WireGuard {
    */
   async saveConfig() {
     const wgInterface = await Database.interfaces.get();
+    
+    // Bring up exit nodes before generating config
+    await this.#ensureExitNodesUp();
+    
     await this.#saveWireguardConfig(wgInterface);
     await this.#syncWireguardConfig(wgInterface);
     
     // Apply ACL rules immediately after syncing config
     await applyAclRules();
+    
+    // Apply egress rules immediately after ACL
+    await applyEgressRules();
+  }
+
+  async #ensureExitNodesUp() {
+    try {
+      // Get all egress-enabled clients and their devices
+      const clients = await Database.clients.getAll();
+      const requiredDevices = [...new Set(
+        clients
+          .filter(c => c.enabled && c.egressEnabled && c.egressDevice)
+          .map(c => c.egressDevice)
+      )].filter(Boolean) as string[];
+      
+      if (requiredDevices.length > 0) {
+        WG_DEBUG(`Ensuring exit nodes are up: ${requiredDevices.join(', ')}`);
+        await bringUpExitNodes(requiredDevices);
+      }
+    } catch (error) {
+      WG_DEBUG('Error ensuring exit nodes are up:', error);
+      throw error;
+    }
   }
 
   /**
@@ -40,6 +68,13 @@ class WireGuard {
       wgInterface.name,
       wgInterface.ipv4Cidr
     );
+
+    // Generate egress scripts
+    const egressPostUp = await generateEgressPostUpScript(
+      wgInterface.name,
+      wgInterface.ipv4Cidr
+    );
+    const egressPreDown = await generateEgressPreDownScript();
     const aclPreDown = await generatePreDownScript(
       wgInterface.name
     );
@@ -76,7 +111,12 @@ class WireGuard {
     // Add ACL commands
     if (aclPostUp) postUpCommands.push(aclPostUp);
     
+    // Add egress commands (after ACL)
+    if (egressPostUp) postUpCommands.push(egressPostUp);
+    
     const preDownCommands = [];
+    // Egress cleanup first, then ACL cleanup
+    if (egressPreDown) preDownCommands.push(egressPreDown);
     if (aclPreDown) preDownCommands.push(aclPreDown);
     preDownCommands.push(...hooks.preDown.split('\n').filter(cmd => cmd.trim()));
 
@@ -292,6 +332,24 @@ class WireGuard {
     }
 
     WG_DEBUG(`Starting Wireguard Interface ${wgInterface.name}...`);
+    
+    // Bring up all configured exit nodes before starting main interface
+    try {
+      const clients = await Database.clients.getAll();
+      const requiredDevices = [...new Set(
+        clients
+          .filter(c => c.enabled && c.egressEnabled && c.egressDevice)
+          .map(c => c.egressDevice)
+      )].filter(Boolean) as string[];
+      
+      if (requiredDevices.length > 0) {
+        WG_DEBUG(`Bringing up exit nodes on startup: ${requiredDevices.join(', ')}`);
+        await bringUpExitNodes(requiredDevices);
+      }
+    } catch (e) {
+      WG_DEBUG('Warning: Failed to bring up some exit nodes:', e);
+    }
+    
     await this.#saveWireguardConfig(wgInterface);
     await wg.down(wgInterface.name).catch(() => {});
     await wg.up(wgInterface.name).catch((err) => {

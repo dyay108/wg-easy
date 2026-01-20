@@ -82,6 +82,35 @@
               :label="$t('general.persistentKeepalive')"
             />
           </FormGroup>
+          <FormGroup>
+            <FormHeading :description="$t('client.egressDesc')">
+              {{ $t('client.egress') }}
+            </FormHeading>
+            <FormSwitchField
+              id="egressEnabled"
+              v-model="data.egressEnabled"
+              :label="$t('client.egressEnabled')"
+              :description="$t('client.egressEnabledDesc')"
+            />
+            <div v-if="data.egressEnabled">
+              <label for="egressDevice" class="mb-2 block text-sm font-medium text-gray-700 dark:text-neutral-300">
+                {{ $t('client.egressDevice') }}
+              </label>
+              <select
+                id="egressDevice"
+                v-model="data.egressDevice"
+                class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
+              >
+                <option :value="null">{{ $t('client.egressDeviceDefault') }}</option>
+                <option v-for="device in exitNodes" :key="device" :value="device">
+                  {{ device }}
+                </option>
+              </select>
+              <p class="mt-1 text-sm text-gray-600 dark:text-neutral-400">
+                {{ $t('client.egressDeviceDesc') }}
+              </p>
+            </div>
+          </FormGroup>
           <FormGroup v-if="globalStore.information?.isAwg">
             <FormHeading>{{ $t('awg.obfuscationParameters') }}</FormHeading>
 
@@ -215,6 +244,11 @@ const { data: _data, refresh } = await useFetch(`/api/client/${id}`, {
   method: 'get',
 });
 const data = toRef(_data.value);
+
+// Fetch available exit nodes
+const { data: exitNodes } = await useFetch<string[]>('/api/admin/egress/devices', {
+  method: 'get',
+});
 
 const _submit = useSubmit(
   `/api/client/${id}`,

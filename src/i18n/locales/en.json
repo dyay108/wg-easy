@@ -121,7 +121,14 @@
     "endpointDesc": "IP of the client from which the WireGuard connection is established",
     "search": "Search clients...",
     "config": "Configuration",
-    "viewConfig": "View Configuration"
+    "viewConfig": "View Configuration",
+    "egress": "Internet Egress Routing",
+    "egressDesc": "Route client's internet traffic through a specific exit node",
+    "egressEnabled": "Enable Egress Routing",
+    "egressEnabledDesc": "Route this client's internet traffic through a custom exit node",
+    "egressDevice": "Exit Node Device",
+    "egressDeviceDefault": "(Default - Use Interface Device)",
+    "egressDeviceDesc": "Select which WireGuard exit node to route internet traffic through. Default uses the interface's configured device (e.g., eth0). Exit nodes must be placed in /etc/wireguard/exit_nodes/ directory."
   },
   "dialog": {
     "change": "Change",

@@ -20,6 +20,11 @@
           </div>
           <ClientCardOneTimeLink :client="client" />
           <ClientCardExpireDate :client="client" />
+          <div v-if="client.egressEnabled" class="mt-1 flex items-center gap-1 text-xs">
+            <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+              {{ client.egressDevice ? `🌐 ${client.egressDevice}` : '🌐 Default Egress' }}
+            </span>
+          </div>
         </div>
 
         <div

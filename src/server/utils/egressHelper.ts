@@ -1,0 +1,320 @@
+import debug from 'debug';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { exec } from './cmd';
+import type { ClientType } from '#db/repositories/client/types';
+
+const EGRESS_DEBUG = debug('Egress');
+const EXIT_NODES_DIR = '/etc/wireguard/exit_nodes';
+const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
+const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
+
+// Base values for fwmark and routing table assignment
+const BASE_FWMARK = 0x10; // Start at 0x10 to avoid conflicts
+const BASE_RT_TABLE = 200; // Start at table 200
+
+interface DeviceGroup {
+  device: string;
+  clientIps: string[];
+  fwmark: string;
+  rtTable: number;
+}
+
+/**
+ * Check if a device has an IP address assigned
+ */
+async function hasIpAddress(device: string): Promise<boolean> {
+  try {
+    const output = await exec(`ip addr show ${device}`);
+    return /inet /.test(output);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Discover available exit node configs in /etc/wireguard/exit_nodes/
+ * Returns list of device names that are UP and have IP addresses
+ */
+export async function discoverExitNodes(): Promise<string[]> {
+  try {
+    const files = await fs.readdir(EXIT_NODES_DIR);
+    const configs = files
+      .filter((file) => file.endsWith('.conf'))
+      .map((file) => file.replace('.conf', ''));
+    
+    // Filter to only include devices that are up and have IPs
+    const activeDevices: string[] = [];
+    for (const device of configs) {
+      const isUp = await isDeviceUp(device);
+      const hasIp = await hasIpAddress(device);
+      if (isUp && hasIp) {
+        activeDevices.push(device);
+      } else {
+        EGRESS_DEBUG(`Device ${device} excluded: up=${isUp}, hasIp=${hasIp}`);
+      }
+    }
+    
+    EGRESS_DEBUG(`Discovered ${activeDevices.length} active exit nodes: ${activeDevices.join(', ')}`);
+    return activeDevices;
+  } catch (error) {
+    EGRESS_DEBUG('Failed to discover exit nodes:', error);
+    return [];
+  }
+}
+
+/**
+ * Check if a device interface is already up
+ */
+async function isDeviceUp(device: string): Promise<boolean> {
+  try {
+    await exec(`wg show ${device}`);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Bring up exit node WireGuard interfaces
+ * Only brings up devices that are needed and not already up
+ */
+export async function bringUpExitNodes(devices: string[]): Promise<void> {
+  for (const device of devices) {
+    try {
+      if (await isDeviceUp(device)) {
+        EGRESS_DEBUG(`Device ${device} already up, skipping`);
+        continue;
+      }
+
+      EGRESS_DEBUG(`Bringing up exit node: ${device}`);
+      await exec(`wg-quick up ${device}`);
+      EGRESS_DEBUG(`Successfully brought up ${device}`);
+    } catch (error) {
+      EGRESS_DEBUG(`Failed to bring up ${device}:`, error);
+      // Continue with other devices even if one fails
+    }
+  }
+}
+
+/**
+ * Group clients by their egress device
+ * Returns map of device -> client IPs, excluding clients with null device (default)
+ */
+function groupClientsByDevice(clients: any[]): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+
+  for (const client of clients) {
+    if (!client.enabled || !client.egressEnabled || !client.egressDevice) {
+      // Skip disabled clients, egress-disabled clients, and default device users
+      continue;
+    }
+
+    const device = client.egressDevice;
+    const clientIps = groups.get(device) || [];
+    clientIps.push(client.ipv4Address);
+    groups.set(device, clientIps);
+  }
+
+  return groups;
+}
+
+/**
+ * Assign unique fwmark and routing table to each device
+ */
+function assignDeviceParams(devices: string[]): DeviceGroup[] {
+  return devices.map((device, index) => ({
+    device,
+    clientIps: [], // Will be filled later
+    fwmark: `0x${(BASE_FWMARK + index).toString(16)}`,
+    rtTable: BASE_RT_TABLE + index,
+  }));
+}
+
+/**
+ * Generate the PostUp script for egress routing
+ */
+export async function generateEgressPostUpScript(
+  interfaceId: string,
+  wgSubnet: string
+): Promise<string> {
+  const clients = await Database.clients.getAll();
+  const clientGroups = groupClientsByDevice(clients);
+
+  if (clientGroups.size === 0) {
+    EGRESS_DEBUG('No clients with egress routing enabled');
+    try {
+      await fs.unlink(EGRESS_SETUP_SCRIPT);
+    } catch {
+      // Ignore if file doesn't exist
+    }
+    return '';
+  }
+
+  EGRESS_DEBUG(`Generating egress script for ${clientGroups.size} device(s)`);
+
+  // Get unique devices
+  const devices = Array.from(clientGroups.keys());
+  const deviceGroups = assignDeviceParams(devices);
+
+  // Fill in client IPs for each group
+  for (const group of deviceGroups) {
+    group.clientIps = clientGroups.get(group.device) || [];
+  }
+
+  // Bring up exit nodes first
+  await bringUpExitNodes(devices);
+
+  const scriptContent = generateNftablesEgressScript(
+    interfaceId,
+    wgSubnet,
+    deviceGroups
+  );
+
+  const fullScript = `#!/usr/bin/env bash\nset -e\n\n${scriptContent}`;
+  await fs.writeFile(EGRESS_SETUP_SCRIPT, fullScript, { mode: 0o755 });
+  EGRESS_DEBUG(`Wrote egress setup script to ${EGRESS_SETUP_SCRIPT}`);
+
+  return EGRESS_SETUP_SCRIPT;
+}
+
+/**
+ * Generate the PreDown script for egress cleanup
+ */
+export async function generateEgressPreDownScript(): Promise<string> {
+  const clients = await Database.clients.getAll();
+  const clientGroups = groupClientsByDevice(clients);
+
+  if (clientGroups.size === 0) {
+    try {
+      await fs.unlink(EGRESS_CLEANUP_SCRIPT);
+    } catch {
+      // Ignore if file doesn't exist
+    }
+    return '';
+  }
+
+  const devices = Array.from(clientGroups.keys());
+  const deviceGroups = assignDeviceParams(devices);
+
+  let scriptContent = '#!/usr/bin/env bash\nset -e\n\n';
+  
+  // Delete nftables table
+  scriptContent += 'nft delete table ip wg_egress_nat 2>/dev/null || true\n\n';
+  
+  // Remove policy routing rules
+  for (const group of deviceGroups) {
+    scriptContent += `ip rule del fwmark ${group.fwmark} table ${group.rtTable} 2>/dev/null || true\n`;
+    scriptContent += `ip route flush table ${group.rtTable} 2>/dev/null || true\n`;
+  }
+
+  await fs.writeFile(EGRESS_CLEANUP_SCRIPT, scriptContent, { mode: 0o755 });
+  EGRESS_DEBUG(`Wrote egress cleanup script to ${EGRESS_CLEANUP_SCRIPT}`);
+
+  return EGRESS_CLEANUP_SCRIPT;
+}
+
+/**
+ * Generate nftables script for egress routing and NAT
+ */
+function generateNftablesEgressScript(
+  interfaceId: string,
+  wgSubnet: string,
+  deviceGroups: DeviceGroup[]
+): string {
+  let script = '';
+  
+  // Start with validation and building arrays of valid device data
+  script += `# Validate exit nodes\n`;
+  script += `declare -A DEVICE_FWMARK\n`;
+  script += `declare -A DEVICE_TABLE\n`;
+  script += `declare -A DEVICE_IPS\n\n`;
+  
+  for (const group of deviceGroups) {
+    if (group.clientIps.length === 0) continue;
+    
+    const ipList = group.clientIps.join(' ');
+    
+    script += `# Check ${group.device}\n`;
+    script += `if wg show ${group.device} &>/dev/null && ip addr show ${group.device} | grep -q 'inet '; then\n`;
+    script += `  echo "Exit node ${group.device} is active"\n`;
+    script += `  DEVICE_FWMARK["${group.device}"]="${group.fwmark}"\n`;
+    script += `  DEVICE_TABLE["${group.device}"]="${group.rtTable}"\n`;
+    script += `  DEVICE_IPS["${group.device}"]="${ipList}"\n`;
+    script += `  ip rule add fwmark ${group.fwmark} table ${group.rtTable} 2>/dev/null || true\n`;
+    script += `  ip route replace default dev ${group.device} table ${group.rtTable}\n`;
+    script += `else\n`;
+    script += `  echo "WARNING: Exit node ${group.device} is not available. Skipping." >&2\n`;
+    script += `fi\n\n`;
+  }
+  
+  // Check if any devices are valid
+  script += `if [ \${#DEVICE_FWMARK[@]} -eq 0 ]; then\n`;
+  script += `  echo "WARNING: No valid exit nodes found. Skipping nftables configuration." >&2\n`;
+  script += `  exit 0\n`;
+  script += `fi\n\n`;
+
+  // Generate nftables config dynamically
+  script += `# Generate nftables configuration for valid devices\n`;
+  script += `nft delete table ip wg_egress_nat 2>/dev/null || true\n\n`;
+  script += `{\n`;
+  script += `  echo "table ip wg_egress_nat {"\n`;
+  script += `  \n`;
+  script += `  # Generate IP sets for each valid device\n`;
+  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    ips=\${DEVICE_IPS[$device]}\n`;
+  script += `    # Convert space-separated IPs to comma-separated\n`;
+  script += `    ips_formatted=$(echo "\$ips" | sed 's/ /, /g')\n`;
+  script += `    echo "  set \${setname} { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
+  script += `  done\n`;
+  script += `  echo ""\n`;
+  script += `  \n`;
+  script += `  # Prerouting chain\n`;
+  script += `  echo "  chain prerouting {"\n`;
+  script += `  echo "    type filter hook prerouting priority -149;"\n`;
+  script += `  for device in "\${!DEVICE_FWMARK[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    fwmark=\${DEVICE_FWMARK[$device]}\n`;
+  script += `    echo "    iifname \\"${interfaceId}\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
+  script += `  done\n`;
+  script += `  echo "  }"\n`;
+  script += `  echo ""\n`;
+  script += `  \n`;
+  script += `  # Forward chain\n`;
+  script += `  echo "  chain forward {"\n`;
+  script += `  echo "    type filter hook forward priority 1;"\n`;
+  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    echo "    iifname \\"${interfaceId}\\" oifname \\"\${device}\\" ip saddr @\${setname} accept"\n`;
+  script += `  done\n`;
+  script += `  echo "  }"\n`;
+  script += `  echo ""\n`;
+  script += `  \n`;
+  script += `  # Postrouting chain for NAT\n`;
+  script += `  echo "  chain postrouting {"\n`;
+  script += `  echo "    type nat hook postrouting priority 101;"\n`;
+  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
+  script += `    echo "    oifname \\"\${device}\\" masquerade"\n`;
+  script += `  done\n`;
+  script += `  echo "  }"\n`;
+  script += `  \n`;
+  script += `  echo "}"\n`;
+  script += `} | nft -f -\n`;
+
+  return script;
+}
+
+/**
+ * Apply egress rules immediately (called after config sync)
+ */
+export async function applyEgressRules(): Promise<void> {
+  try {
+    await fs.access(EGRESS_SETUP_SCRIPT);
+    EGRESS_DEBUG('Applying egress rules immediately');
+    await exec(`bash ${EGRESS_SETUP_SCRIPT}`);
+    EGRESS_DEBUG('Egress rules applied successfully');
+  } catch (error) {
+    EGRESS_DEBUG('Failed to apply egress rules:', error);
+  }
+}

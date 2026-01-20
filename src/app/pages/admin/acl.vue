@@ -264,13 +264,15 @@
 import type { AclRuleType } from '#db/repositories/acl/types';
 import type { ClientType } from '#db/repositories/client/types';
 
-const { data: config, refresh: refreshConfig } = await useFetch('/api/admin/acl/config', {
+const { data: _config, refresh: refreshConfig } = await useFetch('/api/admin/acl/config', {
   method: 'get',
 });
+const config = toRef(_config.value);
 
-const { data: rules, refresh: refreshRules } = await useFetch('/api/admin/acl/rules', {
+const { data: _rules, refresh: refreshRules } = await useFetch('/api/admin/acl/rules', {
   method: 'get',
 });
+const rules = toRef(_rules.value);
 
 const { data: clients } = await useFetch<ClientType[]>('/api/client', {
   method: 'get',
@@ -341,7 +343,12 @@ async function submitConfigHandler() {
   await useSubmit(
     '/api/admin/acl/config',
     { method: 'post' },
-    { revert: async () => { await refreshConfig(); } }
+    { 
+      revert: async () => { 
+        await refreshConfig(); 
+        config.value = toRef(_config.value).value;
+      } 
+    }
   )(config.value);
 }
 
@@ -365,17 +372,24 @@ async function submitRule() {
       await useSubmit(
         `/api/admin/acl/rules/${editingRule.value.id}`,
         { method: 'post' },
-        { revert: async () => { await refreshRules(); } }
+        { revert: async () => { 
+          await refreshRules(); 
+          rules.value = toRef(_rules.value).value;
+        } }
       )(data);
     } else {
       await useSubmit(
         '/api/admin/acl/rules',
         { method: 'post' },
-        { revert: async () => { await refreshRules(); } }
+        { revert: async () => { 
+          await refreshRules(); 
+          rules.value = toRef(_rules.value).value;
+        } }
       )(data);
     }
 
     await refreshRules();
+    rules.value = toRef(_rules.value).value;
     closeModal();
   } catch (error) {
     // Don't close modal on error
@@ -403,6 +417,7 @@ async function deleteRuleConfirm(rule: AclRuleType) {
 
   await $fetch(`/api/admin/acl/rules/${rule.id}`, { method: 'DELETE' });
   await refreshRules();
+  rules.value = toRef(_rules.value).value;
 }
 
 function closeModal() {
