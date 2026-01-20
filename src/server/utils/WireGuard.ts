@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import debug from 'debug';
 import { encodeQR } from 'qr';
 import { generatePostUpScript, generatePreDownScript, applyAclRules } from './aclHelper';
-import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes } from './egressHelper';
+import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes, getAllExitNodeConfigs } from './egressHelper';
 import type { InterfaceType } from '#db/repositories/interface/types';
 
 const WG_DEBUG = debug('WireGuard');
@@ -32,17 +32,12 @@ class WireGuard {
 
   async #ensureExitNodesUp() {
     try {
-      // Get all egress-enabled clients and their devices
-      const clients = await Database.clients.getAll();
-      const requiredDevices = [...new Set(
-        clients
-          .filter(c => c.enabled && c.egressEnabled && c.egressDevice)
-          .map(c => c.egressDevice)
-      )].filter(Boolean) as string[];
+      // Get all exit node configs and bring them all up
+      const allExitNodes = await getAllExitNodeConfigs();
       
-      if (requiredDevices.length > 0) {
-        WG_DEBUG(`Ensuring exit nodes are up: ${requiredDevices.join(', ')}`);
-        await bringUpExitNodes(requiredDevices);
+      if (allExitNodes.length > 0) {
+        WG_DEBUG(`Ensuring all exit nodes are up: ${allExitNodes.join(', ')}`);
+        await bringUpExitNodes(allExitNodes);
       }
     } catch (error) {
       WG_DEBUG('Error ensuring exit nodes are up:', error);
@@ -335,16 +330,11 @@ class WireGuard {
     
     // Bring up all configured exit nodes before starting main interface
     try {
-      const clients = await Database.clients.getAll();
-      const requiredDevices = [...new Set(
-        clients
-          .filter(c => c.enabled && c.egressEnabled && c.egressDevice)
-          .map(c => c.egressDevice)
-      )].filter(Boolean) as string[];
+      const allExitNodes = await getAllExitNodeConfigs();
       
-      if (requiredDevices.length > 0) {
-        WG_DEBUG(`Bringing up exit nodes on startup: ${requiredDevices.join(', ')}`);
-        await bringUpExitNodes(requiredDevices);
+      if (allExitNodes.length > 0) {
+        WG_DEBUG(`Bringing up all exit nodes on startup: ${allExitNodes.join(', ')}`);
+        await bringUpExitNodes(allExitNodes);
       }
     } catch (e) {
       WG_DEBUG('Warning: Failed to bring up some exit nodes:', e);

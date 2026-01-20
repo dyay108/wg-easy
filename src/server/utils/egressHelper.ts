@@ -9,6 +9,25 @@ const EXIT_NODES_DIR = '/etc/wireguard/exit_nodes';
 const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
 const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
 
+/**
+ * Get all exit node configs from directory
+ * Returns list of device names found in .conf files (regardless of up status)
+ */
+export async function getAllExitNodeConfigs(): Promise<string[]> {
+  try {
+    const files = await fs.readdir(EXIT_NODES_DIR);
+    const configs = files
+      .filter((file) => file.endsWith('.conf'))
+      .map((file) => file.replace('.conf', ''));
+    
+    EGRESS_DEBUG(`Found ${configs.length} exit node configs: ${configs.join(', ')}`);
+    return configs;
+  } catch (error) {
+    EGRESS_DEBUG('Failed to read exit nodes directory:', error);
+    return [];
+  }
+}
+
 // Base values for fwmark and routing table assignment
 const BASE_FWMARK = 0x10; // Start at 0x10 to avoid conflicts
 const BASE_RT_TABLE = 200; // Start at table 200
@@ -95,7 +114,8 @@ export async function bringUpExitNodes(devices: string[]): Promise<void> {
       }
 
       EGRESS_DEBUG(`Bringing up exit node: ${device}`);
-      await exec(`wg-quick up ${device}`);
+      const configPath = `${EXIT_NODES_DIR}/${device}.conf`;
+      await exec(`wg-quick up ${configPath}`);
       EGRESS_DEBUG(`Successfully brought up ${device}`);
     } catch (error) {
       EGRESS_DEBUG(`Failed to bring up ${device}:`, error);
