@@ -43,10 +43,10 @@
               <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.source') }}</th>
               <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.destination') }}</th>
               <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.protocol') }}</th>
-              <th class="border p-2 text-center whitespace-normal break-words" style="width: 12rem;">{{ $t('acl.ports') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words w-48">{{ $t('acl.ports') }}</th>
               <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.description') }}</th>
               <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.enabled') }}</th>
-              <th class="border p-2 text-center whitespace-normal break-words" style="width: 16rem;">{{ $t('acl.actions') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words w-64">{{ $t('acl.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -73,8 +73,7 @@
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent
-                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
-                        style="min-width: 16rem; max-width: 32rem;"
+                        class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
                         {{ getClientNameByCidr(rule.sourceCidr) ? `${getClientNameByCidr(rule.sourceCidr)} (${rule.sourceCidr})` : rule.sourceCidr }}
@@ -102,8 +101,7 @@
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent
-                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
-                        style="min-width: 16rem; max-width: 32rem;"
+                        class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
                         {{ getClientNameByCidr(rule.destinationCidr) ? `${getClientNameByCidr(rule.destinationCidr)} (${rule.destinationCidr})` : rule.destinationCidr }}
@@ -123,8 +121,7 @@
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent
-                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
-                        style="min-width: 8rem; max-width: 16rem;"
+                        class="z-[9999] min-w-[8rem] max-w-[16rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
                         {{ rule.protocol.toUpperCase() }}
@@ -144,8 +141,7 @@
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent
-                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
-                        style="min-width: 16rem; max-width: 32rem;"
+                        class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
                         {{ rule.ports }}
@@ -166,8 +162,7 @@
                     </TooltipTrigger>
                     <TooltipPortal>
                       <TooltipContent
-                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
-                        style="min-width: 16rem; max-width: 32rem;"
+                        class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
                         {{ rule.description }}
