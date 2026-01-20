@@ -28,9 +28,13 @@ export async function applyAclRules(): Promise<void> {
     await exec(`bash ${ACL_SETUP_SCRIPT}`);
     ACL_DEBUG('ACL rules applied successfully');
   } catch (error) {
-    // If script doesn't exist or execution fails, that's okay
-    // (might be disabled or no rules)
-    ACL_DEBUG('Failed to apply ACL rules:', error);
+    // If script doesn't exist, ACL might be disabled - clean up rules
+    ACL_DEBUG('ACL script not found, cleaning up any existing rules');
+    try {
+      await exec('nft delete table ip wg_acl_v4 2>/dev/null || true');
+    } catch {
+      // Ignore cleanup errors
+    }
   }
 }
 
@@ -48,7 +52,14 @@ export async function generatePostUpScript(
   const config = await Database.acl.getConfig(_interfaceId);
   
   if (!config.enabled) {
-    ACL_DEBUG('ACL disabled, removing setup script if exists');
+    ACL_DEBUG('ACL disabled, removing setup script and cleaning up rules');
+    try {
+      // Clean up existing nftables rules
+      await exec('nft delete table ip wg_acl_v4 2>/dev/null || true');
+      ACL_DEBUG('Cleaned up ACL nftables rules');
+    } catch {
+      // Ignore if cleanup fails
+    }
     try {
       await fs.unlink(ACL_SETUP_SCRIPT);
     } catch {
