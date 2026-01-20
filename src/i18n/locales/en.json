@@ -128,7 +128,11 @@
     "egressEnabledDesc": "Route this client's internet traffic through a custom exit node",
     "egressDevice": "Exit Node Device",
     "egressDeviceDefault": "(Default - Use Interface Device)",
-    "egressDeviceDesc": "Select which WireGuard exit node to route internet traffic through. Default uses the interface's configured device (e.g., eth0). Exit nodes must be placed in /etc/wireguard/exit_nodes/ directory."
+    "egressDeviceDesc": "Select which WireGuard exit node to route internet traffic through. Default uses the interface's configured device (e.g., eth0). Exit nodes must be placed in /etc/wireguard/exit_nodes/ directory.",
+    "isExitNode": "Allow as Exit Node",
+    "isExitNodeDesc": "Allow other clients to route their internet traffic through this client. You must configure IP forwarding and NAT on this client's host.",
+    "isExitNodePostUp": "Add to PostUp:",
+    "isExitNodePostDown": "Add to PostDown:"
   },
   "dialog": {
     "change": "Change",
