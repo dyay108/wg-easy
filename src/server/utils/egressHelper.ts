@@ -28,6 +28,66 @@ export async function getAllExitNodeConfigs(): Promise<string[]> {
   }
 }
 
+/**
+ * Validate and clean up client egress device assignments
+ * Disables egress for clients using non-existent exit nodes
+ */
+export async function validateClientEgressDevices(): Promise<void> {
+  try {
+    EGRESS_DEBUG('Validating client egress device assignments...');
+    const availableDevices = await getAllExitNodeConfigs();
+    EGRESS_DEBUG('Available devices:', availableDevices);
+    const clients = await Database.clients.getAll();
+    
+    for (const client of clients) {
+      // Skip clients without egress enabled or those using default device
+      if (!client.egressEnabled || !client.egressDevice) {
+        continue;
+      }
+      
+      // Check if the configured device still exists
+      if (!availableDevices.includes(client.egressDevice)) {
+        EGRESS_DEBUG(`Client ${client.name} (${client.id}) references missing exit node: ${client.egressDevice}. Disabling egress.`);
+        try {
+          await Database.clients.update(client.id, {
+            name: client.name,
+            enabled: client.enabled,
+            expiresAt: client.expiresAt,
+            ipv4Address: client.ipv4Address,
+            ipv6Address: client.ipv6Address,
+            preUp: client.preUp,
+            postUp: client.postUp,
+            preDown: client.preDown,
+            postDown: client.postDown,
+            allowedIps: client.allowedIps,
+            serverAllowedIps: client.serverAllowedIps,
+            mtu: client.mtu,
+            jC: client.jC,
+            jMin: client.jMin,
+            jMax: client.jMax,
+            i1: client.i1,
+            i2: client.i2,
+            i3: client.i3,
+            i4: client.i4,
+            i5: client.i5,
+            persistentKeepalive: client.persistentKeepalive,
+            serverEndpoint: client.serverEndpoint,
+            dns: client.dns,
+            egressEnabled: false,
+            egressDevice: null,
+          });
+          EGRESS_DEBUG(`Successfully disabled egress for client ${client.id}`);
+        } catch (updateError) {
+          EGRESS_DEBUG(`Failed to update client ${client.id}:`, updateError);
+        }
+      }
+    }
+    EGRESS_DEBUG('Validation complete');
+  } catch (error) {
+    EGRESS_DEBUG('Failed to validate client egress devices:', error);
+  }
+}
+
 // Base values for fwmark and routing table assignment
 const BASE_FWMARK = 0x10; // Start at 0x10 to avoid conflicts
 const BASE_RT_TABLE = 200; // Start at table 200

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import debug from 'debug';
 import { encodeQR } from 'qr';
 import { generatePostUpScript, generatePreDownScript, applyAclRules } from './aclHelper';
-import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes, getAllExitNodeConfigs } from './egressHelper';
+import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes, getAllExitNodeConfigs, validateClientEgressDevices } from './egressHelper';
 import type { InterfaceType } from '#db/repositories/interface/types';
 
 const WG_DEBUG = debug('WireGuard');
@@ -16,6 +16,9 @@ class WireGuard {
    */
   async saveConfig() {
     const wgInterface = await Database.interfaces.get();
+    
+    // Validate client egress device assignments before regenerating config
+    await validateClientEgressDevices();
     
     // Bring up exit nodes before generating config
     await this.#ensureExitNodesUp();
@@ -327,6 +330,13 @@ class WireGuard {
     }
 
     WG_DEBUG(`Starting Wireguard Interface ${wgInterface.name}...`);
+    
+    // Validate client egress device assignments before starting
+    try {
+      await validateClientEgressDevices();
+    } catch (e) {
+      WG_DEBUG('Warning: Failed to validate egress devices:', e);
+    }
     
     // Bring up all configured exit nodes before starting main interface
     try {
