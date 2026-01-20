@@ -35,18 +35,18 @@
         </button>
       </div>
 
-      <!-- Rules Table -->
-      <div v-if="rules.length > 0" class="overflow-x-auto">
-        <table class="w-full border-collapse">
+      <!-- Rules Table (Desktop) -->
+      <div v-if="rules.length > 0" class="hidden overflow-x-auto sm:block">
+        <table class="w-full table-fixed border-collapse">
           <thead class="bg-gray-100 dark:bg-neutral-700">
             <tr>
-              <th class="border p-2 text-left">{{ $t('acl.source') }}</th>
-              <th class="border p-2 text-left">{{ $t('acl.destination') }}</th>
-              <th class="border p-2 text-left">{{ $t('acl.protocol') }}</th>
-              <th class="border p-2 text-left">{{ $t('acl.ports') }}</th>
-              <th class="border p-2 text-left">{{ $t('acl.description') }}</th>
-              <th class="border p-2 text-left">{{ $t('acl.enabled') }}</th>
-              <th class="border p-2 text-center">{{ $t('acl.actions') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.source') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.destination') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.protocol') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words" style="width: 12rem;">{{ $t('acl.ports') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.description') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words">{{ $t('acl.enabled') }}</th>
+              <th class="border p-2 text-center whitespace-normal break-words" style="width: 16rem;">{{ $t('acl.actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -55,30 +55,136 @@
               :key="rule.id"
               class="transition hover:bg-gray-50 dark:hover:bg-neutral-600"
             >
-              <td class="border p-2">
-                <div class="font-mono text-sm">{{ rule.sourceCidr }}</div>
-                <div v-if="getClientNameByCidr(rule.sourceCidr)" class="text-xs text-red-700 dark:text-red-400">
-                  {{ getClientNameByCidr(rule.sourceCidr) }}
-                </div>
-              </td>
-              <td class="border p-2">
-                <div class="font-mono text-sm">{{ rule.destinationCidr }}</div>
-                <div v-if="getClientNameByCidr(rule.destinationCidr)" class="text-xs text-red-700 dark:text-red-400">
-                  {{ getClientNameByCidr(rule.destinationCidr) }}
-                </div>
-              </td>
-              <td class="border p-2">
-                <span class="rounded bg-gray-200 px-2 py-1 text-xs font-semibold dark:bg-neutral-600">
-                  {{ rule.protocol.toUpperCase() }}
-                </span>
-              </td>
-              <td class="border p-2 font-mono text-sm">{{ rule.ports || '—' }}</td>
-              <td class="border p-2">{{ rule.description || '—' }}</td>
               <td class="border p-2 text-center">
-                <span v-if="rule.enabled" class="text-green-600">✓</span>
-                <span v-else class="text-red-600">✗</span>
+                <TooltipProvider>
+                  <TooltipRoot>
+                    <TooltipTrigger as-child>
+                      <div class="w-full">
+                        <span
+                          v-if="getClientNameByCidr(rule.sourceCidr)"
+                          class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
+                        >
+                          {{ getClientNameByCidr(rule.sourceCidr) }}
+                        </span>
+                        <span v-else class="block truncate font-mono text-sm">
+                          {{ rule.sourceCidr }}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
+                        style="min-width: 16rem; max-width: 32rem;"
+                        :side-offset="5"
+                      >
+                        {{ getClientNameByCidr(rule.sourceCidr) ? `${getClientNameByCidr(rule.sourceCidr)} (${rule.sourceCidr})` : rule.sourceCidr }}
+                        <TooltipArrow class="fill-gray-600" :width="8" />
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </TooltipRoot>
+                </TooltipProvider>
               </td>
               <td class="border p-2 text-center">
+                <TooltipProvider>
+                  <TooltipRoot>
+                    <TooltipTrigger as-child>
+                      <div class="w-full">
+                        <span
+                          v-if="getClientNameByCidr(rule.destinationCidr)"
+                          class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
+                        >
+                          {{ getClientNameByCidr(rule.destinationCidr) }}
+                        </span>
+                        <span v-else class="block truncate font-mono text-sm">
+                          {{ rule.destinationCidr }}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
+                        style="min-width: 16rem; max-width: 32rem;"
+                        :side-offset="5"
+                      >
+                        {{ getClientNameByCidr(rule.destinationCidr) ? `${getClientNameByCidr(rule.destinationCidr)} (${rule.destinationCidr})` : rule.destinationCidr }}
+                        <TooltipArrow class="fill-gray-600" :width="8" />
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </TooltipRoot>
+                </TooltipProvider>
+              </td>
+              <td class="border p-2 text-center">
+                <TooltipProvider>
+                  <TooltipRoot>
+                    <TooltipTrigger as-child>
+                      <span class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold dark:bg-neutral-600">
+                        {{ rule.protocol.toUpperCase() }}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
+                        style="min-width: 8rem; max-width: 16rem;"
+                        :side-offset="5"
+                      >
+                        {{ rule.protocol.toUpperCase() }}
+                        <TooltipArrow class="fill-gray-600" :width="8" />
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </TooltipRoot>
+                </TooltipProvider>
+              </td>
+              <td class="border p-2 text-center">
+                <TooltipProvider v-if="rule.ports">
+                  <TooltipRoot>
+                    <TooltipTrigger as-child>
+                      <div class="w-full truncate font-mono text-sm">
+                        {{ rule.ports }}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
+                        style="min-width: 16rem; max-width: 32rem;"
+                        :side-offset="5"
+                      >
+                        {{ rule.ports }}
+                        <TooltipArrow class="fill-gray-600" :width="8" />
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </TooltipRoot>
+                </TooltipProvider>
+                <span v-else>—</span>
+              </td>
+              <td class="border p-2 text-center">
+                <TooltipProvider v-if="rule.description">
+                  <TooltipRoot>
+                    <TooltipTrigger as-child>
+                      <div class="w-full truncate">
+                        {{ rule.description }}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipPortal>
+                      <TooltipContent
+                        class="z-[9999] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
+                        style="min-width: 16rem; max-width: 32rem;"
+                        :side-offset="5"
+                      >
+                        {{ rule.description }}
+                        <TooltipArrow class="fill-gray-600" :width="8" />
+                      </TooltipContent>
+                    </TooltipPortal>
+                  </TooltipRoot>
+                </TooltipProvider>
+                <span v-else>—</span>
+              </td>
+              <td class="border p-2 text-center">
+                <BaseTooltip :text="rule.enabled ? 'Enabled' : 'Disabled'">
+                  <span v-if="rule.enabled" class="text-green-600">✓</span>
+                  <span v-else class="text-red-600">✗</span>
+                </BaseTooltip>
+              </td>
+              <td class="border p-2 text-center whitespace-nowrap">
                 <button
                   class="mr-2 inline-flex items-center rounded-lg border-2 border-gray-100 px-4 py-2 text-gray-700 transition hover:border-red-800 hover:bg-red-800 hover:text-white dark:border-neutral-600 dark:text-neutral-200"
                   @click="editRule(rule)"
@@ -95,6 +201,126 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Rules List (Mobile) -->
+      <div v-if="rules.length > 0" class="space-y-4 sm:hidden">
+        <div
+          v-for="rule in rules"
+          :key="`mobile-${rule.id}`"
+          class="rounded-lg border border-gray-200 p-4 shadow-sm dark:border-neutral-700"
+        >
+          <div class="mb-3 flex items-center justify-between">
+            <span class="rounded bg-gray-200 px-2 py-1 text-xs font-semibold dark:bg-neutral-600">
+              {{ rule.protocol.toUpperCase() }}
+            </span>
+            <span v-if="rule.enabled" class="text-green-600">✓</span>
+            <span v-else class="text-red-600">✗</span>
+          </div>
+
+          <div class="grid grid-cols-1 gap-3 text-sm">
+            <div>
+              <div class="text-xs font-medium text-gray-500 dark:text-neutral-400">
+                {{ $t('acl.source') }}
+              </div>
+              <div class="mt-1">
+                <details class="group">
+                  <summary class="cursor-pointer list-none" style="list-style: none;">
+                    <span
+                      v-if="getClientNameByCidr(rule.sourceCidr)"
+                      class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
+                    >
+                      {{ getClientNameByCidr(rule.sourceCidr) }}
+                    </span>
+                    <span v-else class="block max-w-full truncate font-mono text-sm">
+                      {{ rule.sourceCidr }}
+                    </span>
+                  </summary>
+                  <div class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400">
+                    {{ rule.sourceCidr }}
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs font-medium text-gray-500 dark:text-neutral-400">
+                {{ $t('acl.destination') }}
+              </div>
+              <div class="mt-1">
+                <details class="group">
+                  <summary class="cursor-pointer list-none" style="list-style: none;">
+                    <span
+                      v-if="getClientNameByCidr(rule.destinationCidr)"
+                      class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
+                    >
+                      {{ getClientNameByCidr(rule.destinationCidr) }}
+                    </span>
+                    <span v-else class="block max-w-full truncate font-mono text-sm">
+                      {{ rule.destinationCidr }}
+                    </span>
+                  </summary>
+                  <div class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400">
+                    {{ rule.destinationCidr }}
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs font-medium text-gray-500 dark:text-neutral-400">
+                {{ $t('acl.ports') }}
+              </div>
+              <div class="mt-1 min-w-0">
+                <details v-if="rule.ports" class="group">
+                  <summary class="cursor-pointer list-none" style="list-style: none;">
+                    <div class="truncate font-mono text-sm">
+                      {{ rule.ports }}
+                    </div>
+                  </summary>
+                  <div class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400">
+                    {{ rule.ports }}
+                  </div>
+                </details>
+                <div v-else>—</div>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs font-medium text-gray-500 dark:text-neutral-400">
+                {{ $t('acl.description') }}
+              </div>
+              <div class="mt-1 min-w-0">
+                <details v-if="rule.description" class="group">
+                  <summary class="cursor-pointer list-none" style="list-style: none;">
+                    <div class="w-full truncate">
+                      {{ rule.description }}
+                    </div>
+                  </summary>
+                  <div class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400">
+                    {{ rule.description }}
+                  </div>
+                </details>
+                <div v-else>—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 flex gap-2">
+            <button
+              class="flex-1 inline-flex items-center justify-center rounded-lg border-2 border-gray-100 px-4 py-2 text-gray-700 transition hover:border-red-800 hover:bg-red-800 hover:text-white dark:border-neutral-600 dark:text-neutral-200"
+              @click="editRule(rule)"
+            >
+              {{ $t('acl.edit') }}
+            </button>
+            <button
+              class="flex-1 inline-flex items-center justify-center rounded-lg border-2 border-red-600 bg-red-600 px-4 py-2 text-white transition hover:border-red-800 hover:bg-red-800 dark:border-red-500 dark:bg-red-500"
+              @click="deleteRuleConfirm(rule)"
+            >
+              {{ $t('acl.delete') }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div v-else class="rounded border border-gray-300 p-8 text-center text-gray-500 dark:border-neutral-700">
