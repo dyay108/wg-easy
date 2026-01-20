@@ -62,7 +62,7 @@ export async function generatePostUpScript(
   let scriptContent: string;
   if (rules.length === 0) {
     ACL_DEBUG('No ACL rules found, generating default deny script');
-    scriptContent = generateDefaultDenyScript(config);
+    scriptContent = generateDefaultDenyScript(config, _interfaceId);
   } else {
     ACL_DEBUG(`Generating ACL script for ${rules.length} rules`);
     scriptContent = generateNftablesScript(config, rules, _interfaceId, _wgSubnet);
@@ -104,7 +104,7 @@ export async function generatePreDownScript(_interfaceId: string): Promise<strin
 /**
  * Generate default deny-all script when no rules exist
  */
-function generateDefaultDenyScript(config: AclConfigType): string {
+function generateDefaultDenyScript(config: AclConfigType, interfaceId: string): string {
     return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
 nft -f - <<'EOF'
 table ip ${config.filterTableName} {
@@ -112,6 +112,7 @@ table ip ${config.filterTableName} {
     type filter hook forward priority 0;
     policy ${config.defaultPolicy};
     ct state established,related accept
+    iifname "${interfaceId}" oifname != "${interfaceId}" accept comment "Allow egress traffic"
   }
 }
 EOF`;
@@ -175,6 +176,7 @@ ${portSets.length > 0 ? portSets.join('\n') + '\n' : ''}
     type filter hook forward priority 0;
     policy ${config.defaultPolicy};
     ct state established,related accept
+    iifname "${interfaceId}" oifname != "${interfaceId}" accept comment "Allow egress traffic"
 ${ruleLines.join('\n')}
   }
 }
