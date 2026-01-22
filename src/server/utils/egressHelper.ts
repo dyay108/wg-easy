@@ -1,5 +1,5 @@
-import debug from 'debug';
 import fs from 'node:fs/promises';
+import debug from 'debug';
 import { exec } from './cmd';
 
 const EGRESS_DEBUG = debug('Egress');
@@ -437,6 +437,8 @@ function generateNftablesEgressScript(
   wgSubnet: string,
   deviceGroups: DeviceGroup[]
 ): string {
+  const escapedQuote = String.fromCharCode(92, 34);
+  const bashVar = (name: string) => '${' + name + '}';
   let script = '';
 
   // Start with validation and building arrays of valid device data
@@ -487,7 +489,7 @@ function generateNftablesEgressScript(
   }
 
   // Check if any egress is configured (either custom devices or default)
-  script += `if [ \${#DEVICE_FWMARK[@]} -eq 0 ] && [ \${#CLIENT_FWMARK[@]} -eq 0 ] && [ -z "$DEFAULT_DEVICE_IPS" ]; then\n`;
+  script += `if [ ${bashVar('#DEVICE_FWMARK[@]')} -eq 0 ] && [ ${bashVar('#CLIENT_FWMARK[@]')} -eq 0 ] && [ -z "$DEFAULT_DEVICE_IPS" ]; then\n`;
   script += `  echo "WARNING: No egress routing configured." >&2\n`;
   script += `  exit 0\n`;
   script += `fi\n\n`;
@@ -503,23 +505,23 @@ function generateNftablesEgressScript(
   script += `  # Default device IP set (if configured)\n`;
   script += `  if [ -n "$DEFAULT_DEVICE_IPS" ]; then\n`;
   script += `    ips_formatted=$(echo "$DEFAULT_DEVICE_IPS" | sed 's/ /, /g')\n`;
-  script += `    echo "  set clients_default { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
+  script += `    echo "  set clients_default { type ipv4_addr; elements = { ${bashVar('ips_formatted')} } }"\n`;
   script += `  fi\n`;
   script += `  \n`;
   script += `  # Custom exit node IP sets\n`;
-  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    ips=\${DEVICE_IPS[$device]}\n`;
-  script += `    ips_formatted=$(echo "\$ips" | sed 's/ /, /g')\n`;
-  script += `    echo "  set \${setname} { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
+  script += `  for device in "${bashVar('!DEVICE_IPS[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    ips=${bashVar('DEVICE_IPS[$device]')}\n`;
+  script += `    ips_formatted=$(echo "$ips" | sed 's/ /, /g')\n`;
+  script += `    echo "  set ${bashVar('setname')} { type ipv4_addr; elements = { ${bashVar('ips_formatted')} } }"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Client exit node IP sets\n`;
-  script += `  for device in "\${!CLIENT_IPS[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    ips=\${CLIENT_IPS[$device]}\n`;
-  script += `    ips_formatted=$(echo "\$ips" | sed 's/ /, /g')\n`;
-  script += `    echo "  set \${setname} { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
+  script += `  for device in "${bashVar('!CLIENT_IPS[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    ips=${bashVar('CLIENT_IPS[$device]')}\n`;
+  script += `    ips_formatted=$(echo "$ips" | sed 's/ /, /g')\n`;
+  script += `    echo "  set ${bashVar('setname')} { type ipv4_addr; elements = { ${bashVar('ips_formatted')} } }"\n`;
   script += `  done\n`;
   script += `  echo ""\n`;
   script += `  \n`;
@@ -528,17 +530,17 @@ function generateNftablesEgressScript(
   script += `  echo "    type filter hook prerouting priority -149;"\n`;
   script += `  \n`;
   script += `  # Custom exit nodes get marked for policy routing\n`;
-  script += `  for device in "\${!DEVICE_FWMARK[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    fwmark=\${DEVICE_FWMARK[$device]}\n`;
-  script += `    echo "    iifname \\\"${interfaceId}\\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
+  script += `  for device in "${bashVar('!DEVICE_FWMARK[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    fwmark=${bashVar('DEVICE_FWMARK[$device]')}\n`;
+  script += `    echo "    iifname ${escapedQuote}${interfaceId}${escapedQuote} ip saddr @${bashVar('setname')} ip daddr != ${wgSubnet} meta mark set ${bashVar('fwmark')}"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Client exit nodes get marked for policy routing\n`;
-  script += `  for device in "\${!CLIENT_FWMARK[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    fwmark=\${CLIENT_FWMARK[$device]}\n`;
-  script += `    echo "    iifname \\\"${interfaceId}\\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
+  script += `  for device in "${bashVar('!CLIENT_FWMARK[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    fwmark=${bashVar('CLIENT_FWMARK[$device]')}\n`;
+  script += `    echo "    iifname ${escapedQuote}${interfaceId}${escapedQuote} ip saddr @${bashVar('setname')} ip daddr != ${wgSubnet} meta mark set ${bashVar('fwmark')}"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Default device clients - no marking needed, use normal routing\n`;
@@ -550,15 +552,15 @@ function generateNftablesEgressScript(
   script += `  echo "    type filter hook forward priority 1;"\n`;
   script += `  \n`;
   script += `  # Allow forwarding for custom exit nodes\n`;
-  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    echo "    iifname \\\"${interfaceId}\\\" oifname \\\"\${device}\\\" ip saddr @\${setname} accept"\n`;
+  script += `  for device in "${bashVar('!DEVICE_IPS[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    echo "    iifname ${escapedQuote}${interfaceId}${escapedQuote} oifname ${escapedQuote}${bashVar('device')}${escapedQuote} ip saddr @${bashVar('setname')} accept"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Allow forwarding for client exit nodes (via WireGuard interface)\n`;
-  script += `  for device in "\${!CLIENT_IPS[@]}"; do\n`;
-  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    echo "    iifname \\\"${interfaceId}\\\" oifname \\\"${interfaceId}\\\" ip saddr @\${setname} accept"\n`;
+  script += `  for device in "${bashVar('!CLIENT_IPS[@]')}"; do\n`;
+  script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    echo "    iifname ${escapedQuote}${interfaceId}${escapedQuote} oifname ${escapedQuote}${interfaceId}${escapedQuote} ip saddr @${bashVar('setname')} accept"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Allow forwarding for default device (to default interface)\n`;
@@ -566,8 +568,8 @@ function generateNftablesEgressScript(
   script += `    # Get the default route interface\n`;
   script += `    DEFAULT_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -1)\n`;
   script += `    if [ -n "$DEFAULT_IFACE" ]; then\n`;
-  script += `      echo "    # Forward default egress clients via \${DEFAULT_IFACE}"\n`;
-  script += `      echo "    iifname \\\"${interfaceId}\\\" oifname \\\"\${DEFAULT_IFACE}\\\" ip saddr @clients_default accept"\n`;
+  script += `      echo "    # Forward default egress clients via ${bashVar('DEFAULT_IFACE')}"\n`;
+  script += `      echo "    iifname ${escapedQuote}${interfaceId}${escapedQuote} oifname ${escapedQuote}${bashVar('DEFAULT_IFACE')}${escapedQuote} ip saddr @clients_default accept"\n`;
   script += `    fi\n`;
   script += `  fi\n`;
   script += `  \n`;
@@ -579,16 +581,16 @@ function generateNftablesEgressScript(
   script += `  echo "    type nat hook postrouting priority 101;"\n`;
   script += `  \n`;
   script += `  # NAT for custom exit nodes\n`;
-  script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
-  script += `    echo "    oifname \\\"\${device}\\\" masquerade"\n`;
+  script += `  for device in "${bashVar('!DEVICE_IPS[@]')}"; do\n`;
+  script += `    echo "    oifname ${escapedQuote}${bashVar('device')}${escapedQuote} masquerade"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # NAT for default device\n`;
   script += `  if [ -n "$DEFAULT_DEVICE_IPS" ]; then\n`;
   script += `    DEFAULT_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -1)\n`;
   script += `    if [ -n "$DEFAULT_IFACE" ]; then\n`;
-  script += `      echo "    # NAT for default egress via \${DEFAULT_IFACE}"\n`;
-  script += `      echo "    oifname \\\"\${DEFAULT_IFACE}\\\" ip saddr @clients_default masquerade"\n`;
+  script += `      echo "    # NAT for default egress via ${bashVar('DEFAULT_IFACE')}"\n`;
+  script += `      echo "    oifname ${escapedQuote}${bashVar('DEFAULT_IFACE')}${escapedQuote} ip saddr @clients_default masquerade"\n`;
   script += `    fi\n`;
   script += `  fi\n`;
   script += `  \n`;

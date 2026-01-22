@@ -1,5 +1,5 @@
-import debug from 'debug';
 import fs from 'node:fs/promises';
+import debug from 'debug';
 import { exec } from './cmd';
 import type { AclRuleType, AclConfigType } from '#db/repositories/acl/types';
 
@@ -34,7 +34,7 @@ export async function applyAclRules(): Promise<void> {
     ACL_DEBUG('Applying ACL rules immediately');
     await exec(`bash ${ACL_SETUP_SCRIPT}`);
     ACL_DEBUG('ACL rules applied successfully');
-  } catch (error) {
+  } catch {
     // If script doesn't exist, ACL might be disabled - clean up rules
     ACL_DEBUG('ACL script not found, cleaning up any existing rules');
     try {
