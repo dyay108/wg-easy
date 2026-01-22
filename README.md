@@ -9,6 +9,16 @@
 
 You have found the easiest way to install & manage WireGuard on any Linux host!
 
+## New in this branch: ACL + Egress Enhancements
+
+- **ACL Management UI**: Create allow/deny rules for peer‑to‑peer traffic with per‑rule protocols and ports.
+- **Public Egress Toggle**: Enable a peer to be used for internet egress while still enforcing ACLs.
+- **Control Client Egress Use**: Allow or deny which clients can use the server (or an exit peer) for internet egress.
+- **Custom Egress Interface**: Route a client’s internet traffic through a specific interface instead of the main one.
+
+> [!WARNING]
+> These enhancements are **not production‑ready** yet. They are new, experimental, and haven’t been fully tested in real‑world deployments.
+
 <!-- TOOD: update screenshot -->
 
 <p align="center">
