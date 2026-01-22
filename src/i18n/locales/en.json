@@ -132,6 +132,7 @@
     "isExitNode": "Allow as Exit Node",
     "isExitNodeDesc": "Allow other clients to route their internet traffic through this client. You must configure IP forwarding and NAT on this client's host.",
     "exitNodeEffectiveAllowedIps": "This peer is the active exit node. Server Allowed IPs are treated as 0.0.0.0/0 for routing.",
+    "activeExitNodeLabel": "Active Egress Peer",
     "isExitNodePostUp": "Add to PostUp:",
     "isExitNodePostDown": "Add to PostDown:"
   },
