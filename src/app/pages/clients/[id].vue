@@ -60,6 +60,12 @@
               v-model="data.serverAllowedIps"
               name="serverAllowedIps"
             />
+            <p
+              v-if="isActiveExitNode"
+              class="col-span-2 text-sm text-gray-500 dark:text-neutral-400"
+            >
+              {{ $t('client.exitNodeEffectiveAllowedIps') }}
+            </p>
           </FormGroup>
           <FormGroup>
             <FormHeading :description="$t('client.dnsDesc')">
@@ -107,7 +113,7 @@
                 class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
               >
                 <option :value="null">{{ $t('client.egressDeviceDefault') }}</option>
-                <option v-for="device in exitNodes" :key="device" :value="device">
+                <option v-for="device in filteredExitNodes" :key="device" :value="device">
                   {{ device }}
                 </option>
               </select>
@@ -270,6 +276,37 @@ const data = toRef(_data.value);
 // Fetch available exit nodes
 const { data: exitNodes } = await useFetch<string[]>('/api/admin/egress/devices', {
   method: 'get',
+});
+
+const { data: aclConfig } = await useFetch('/api/admin/acl/config', {
+  method: 'get',
+});
+
+const isActiveExitNode = computed(() => {
+  const activeExitNodeClientId = aclConfig.value?.exitNodeClientId ?? null;
+  const currentClientId = data.value?.id ?? null;
+  return (
+    activeExitNodeClientId !== null &&
+    currentClientId !== null &&
+    Number(activeExitNodeClientId) === Number(currentClientId)
+  );
+});
+
+const filteredExitNodes = computed(() => {
+  const devices = exitNodes.value ?? [];
+  const activeExitNodeClientId = aclConfig.value?.exitNodeClientId ?? null;
+  const currentClientId = data.value?.id ?? null;
+
+  if (!currentClientId || activeExitNodeClientId === null) {
+    return devices;
+  }
+
+  if (Number(currentClientId) !== Number(activeExitNodeClientId)) {
+    return devices;
+  }
+
+  const prefix = `client:${currentClientId}:`;
+  return devices.filter((device) => !device.startsWith(prefix) && device !== `client:${currentClientId}`);
 });
 
 const _submit = useSubmit(

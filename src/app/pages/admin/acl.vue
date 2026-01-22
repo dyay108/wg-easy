@@ -22,7 +22,7 @@
             :description="$t('acl.allowPublicEgressDescription')"
           />
         </FormGroup>
-        <FormGroup>
+        <FormGroup v-if="config.allowPublicEgress">
           <div class="mb-2 flex items-center gap-2">
             <label for="acl-exit-node-client" class="block text-sm font-medium text-gray-700 dark:text-neutral-300">
               {{ $t('acl.exitNodeClient') }}
