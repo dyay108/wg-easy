@@ -47,6 +47,7 @@ export const client = sqliteTable('clients_table', {
   dns: text({ mode: 'json' }).$type<string[]>(),
   serverEndpoint: text('server_endpoint'),
   enabled: int({ mode: 'boolean' }).notNull(),
+  isExitNode: int('is_exit_node', { mode: 'boolean' }).notNull().default(false),
   egressEnabled: int('egress_enabled', { mode: 'boolean' }).notNull().default(false),
   egressDevice: text('egress_device'), // null = use interface default, else device name (e.g., 'eth0')
   createdAt: text('created_at')

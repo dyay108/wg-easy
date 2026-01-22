@@ -6,6 +6,13 @@ import type { AclRuleType, AclConfigType } from '#db/repositories/acl/types';
 const ACL_DEBUG = debug('ACL');
 const ACL_SETUP_SCRIPT = '/etc/wireguard/acl-setup.sh';
 const ACL_CLEANUP_SCRIPT = '/etc/wireguard/acl-cleanup.sh';
+const PRIVATE_IPV4_CIDRS = [
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '100.64.0.0/10',
+  '169.254.0.0/16',
+];
 
 /**
  * Sanitize string for use in nftables set names
@@ -116,15 +123,21 @@ export async function generatePreDownScript(_interfaceId: string): Promise<strin
  * Generate default deny-all script when no rules exist
  */
 function generateDefaultDenyScript(config: AclConfigType, interfaceId: string): string {
+    const privateSet = config.allowPublicEgress
+      ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
+      : '';
+    const publicEgressRule = config.allowPublicEgress
+      ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
+      : '';
     return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
 nft -f - <<'EOF'
 table ip ${config.filterTableName} {
-  chain forward {
+${privateSet}  chain forward {
     type filter hook forward priority 0;
     policy ${config.defaultPolicy};
     ct state established,related accept
     iifname "${interfaceId}" oifname != "${interfaceId}" accept comment "Allow egress traffic"
-  }
+${publicEgressRule}  }
 }
 EOF`;
   }
@@ -140,6 +153,12 @@ function generateNftablesScript(
 ): string {
     const portSets: string[] = [];
     const ruleLines: string[] = [];
+    const privateSet = config.allowPublicEgress
+      ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
+      : '';
+    const publicEgressRule = config.allowPublicEgress
+      ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
+      : '';
 
     // Group rules by src+dst+proto to create port sets
     const rulesByGroup = new Map<string, AclRuleType[]>();
@@ -182,13 +201,12 @@ function generateNftablesScript(
     return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
 nft -f - <<'EOF'
 table ip ${config.filterTableName} {
-${portSets.length > 0 ? portSets.join('\n') + '\n' : ''}
-  chain forward {
+${portSets.length > 0 ? portSets.join('\n') + '\n' : ''}${privateSet}  chain forward {
     type filter hook forward priority 0;
     policy ${config.defaultPolicy};
     ct state established,related accept
     iifname "${interfaceId}" oifname != "${interfaceId}" accept comment "Allow egress traffic"
-${ruleLines.join('\n')}
+${publicEgressRule}${ruleLines.join('\n')}
   }
 }
 EOF`;

@@ -35,6 +35,10 @@ export const aclConfig = sqliteTable('acl_config_table', {
       onUpdate: 'cascade',
     }),
   enabled: int({ mode: 'boolean' }).notNull().default(false),
+  allowPublicEgress: int('allow_public_egress', { mode: 'boolean' })
+    .notNull()
+    .default(false),
+  exitNodeClientId: int('exit_node_client_id'),
   defaultPolicy: text('default_policy').notNull().default('drop'), // 'drop' or 'accept'
   filterTableName: text('filter_table_name').notNull().default('wg_acl_v4'),
   createdAt: text('created_at')

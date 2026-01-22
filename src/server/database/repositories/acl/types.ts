@@ -63,6 +63,8 @@ export const AclRuleUpdateSchema = AclRuleCreateSchema.partial();
 export const AclConfigUpdateSchema = z.object({
   id: z.string().optional(),
   enabled: z.boolean(),
+  allowPublicEgress: z.boolean(),
+  exitNodeClientId: z.number().nullable(),
   defaultPolicy: z.enum(['drop', 'accept']),
   filterTableName: z.string().min(1),
 });

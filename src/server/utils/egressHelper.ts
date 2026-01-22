@@ -1,13 +1,46 @@
 import debug from 'debug';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { exec } from './cmd';
-import type { ClientType } from '#db/repositories/client/types';
 
 const EGRESS_DEBUG = debug('Egress');
 const EXIT_NODES_DIR = '/etc/wireguard/exit_nodes';
 const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
 const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
+const CLIENT_EXIT_NODE_PREFIX = 'client:';
+
+const parseClientExitNodeDevice = (device: string): number | null => {
+  const match = device.match(/^client:(\d+)(?::.*)?$/);
+  if (!match) return null;
+  return Number(match[1]);
+};
+
+type DbClient = Awaited<ReturnType<typeof Database.clients.getAll>>[number];
+
+const formatClientExitNodeDevice = (client: DbClient): string => {
+  const safeName = client.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+  return `${CLIENT_EXIT_NODE_PREFIX}${client.id}:${safeName}`;
+};
+
+const getActiveExitNodeClientId = async (): Promise<number | null> => {
+  const config = await Database.acl.getConfig('wg0');
+  return config.exitNodeClientId ?? null;
+};
+
+const getExitNodeClients = async (): Promise<DbClient[]> => {
+  const [clients, activeExitNodeClientId] = await Promise.all([
+    Database.clients.getAll(),
+    getActiveExitNodeClientId(),
+  ]);
+  if (activeExitNodeClientId === null) {
+    return [];
+  }
+  return clients.filter(
+    (client) =>
+      client.enabled &&
+      client.isExitNode &&
+      client.id === activeExitNodeClientId
+  );
+};
 
 /**
  * Get all exit node configs from directory
@@ -19,8 +52,10 @@ export async function getAllExitNodeConfigs(): Promise<string[]> {
     const configs = files
       .filter((file) => file.endsWith('.conf'))
       .map((file) => file.replace('.conf', ''));
-    
-    EGRESS_DEBUG(`Found ${configs.length} exit node configs: ${configs.join(', ')}`);
+
+    EGRESS_DEBUG(
+      `Found ${configs.length} exit node configs: ${configs.join(', ')}`
+    );
     return configs;
   } catch (error) {
     EGRESS_DEBUG('Failed to read exit nodes directory:', error);
@@ -35,19 +70,66 @@ export async function getAllExitNodeConfigs(): Promise<string[]> {
 export async function validateClientEgressDevices(): Promise<void> {
   try {
     EGRESS_DEBUG('Validating client egress device assignments...');
-    const availableDevices = await getAllExitNodeConfigs();
-    EGRESS_DEBUG('Available devices:', availableDevices);
+    const availableExternalDevices = await getAllExitNodeConfigs();
+    const exitNodeClients = await getExitNodeClients();
+    const exitNodeClientIds = new Set(exitNodeClients.map((client) => client.id));
+    EGRESS_DEBUG('Available devices:', availableExternalDevices);
     const clients = await Database.clients.getAll();
-    
+
     for (const client of clients) {
       // Skip clients without egress enabled or those using default device
       if (!client.egressEnabled || !client.egressDevice) {
         continue;
       }
-      
+
+      const exitNodeClientId = parseClientExitNodeDevice(client.egressDevice);
+      if (exitNodeClientId !== null) {
+        if (!exitNodeClientIds.has(exitNodeClientId)) {
+          EGRESS_DEBUG(
+            `Client ${client.name} (${client.id}) references missing exit node client: ${client.egressDevice}. Disabling egress.`
+          );
+          try {
+            await Database.clients.update(client.id, {
+              name: client.name,
+              enabled: client.enabled,
+              expiresAt: client.expiresAt,
+              ipv4Address: client.ipv4Address,
+              ipv6Address: client.ipv6Address,
+              preUp: client.preUp,
+              postUp: client.postUp,
+              preDown: client.preDown,
+              postDown: client.postDown,
+              allowedIps: client.allowedIps,
+              serverAllowedIps: client.serverAllowedIps,
+              mtu: client.mtu,
+              jC: client.jC,
+              jMin: client.jMin,
+              jMax: client.jMax,
+              i1: client.i1,
+              i2: client.i2,
+              i3: client.i3,
+              i4: client.i4,
+              i5: client.i5,
+              persistentKeepalive: client.persistentKeepalive,
+              serverEndpoint: client.serverEndpoint,
+              dns: client.dns,
+              egressEnabled: false,
+              egressDevice: null,
+              isExitNode: client.isExitNode,
+            });
+            EGRESS_DEBUG(`Successfully disabled egress for client ${client.id}`);
+          } catch (updateError) {
+            EGRESS_DEBUG(`Failed to update client ${client.id}:`, updateError);
+          }
+        }
+        continue;
+      }
+
       // Check if the configured device still exists
-      if (!availableDevices.includes(client.egressDevice)) {
-        EGRESS_DEBUG(`Client ${client.name} (${client.id}) references missing exit node: ${client.egressDevice}. Disabling egress.`);
+      if (!availableExternalDevices.includes(client.egressDevice)) {
+        EGRESS_DEBUG(
+          `Client ${client.name} (${client.id}) references missing exit node: ${client.egressDevice}. Disabling egress.`
+        );
         try {
           await Database.clients.update(client.id, {
             name: client.name,
@@ -75,6 +157,7 @@ export async function validateClientEgressDevices(): Promise<void> {
             dns: client.dns,
             egressEnabled: false,
             egressDevice: null,
+            isExitNode: client.isExitNode,
           });
           EGRESS_DEBUG(`Successfully disabled egress for client ${client.id}`);
         } catch (updateError) {
@@ -92,11 +175,15 @@ export async function validateClientEgressDevices(): Promise<void> {
 const BASE_FWMARK = 0x10; // Start at 0x10 to avoid conflicts
 const BASE_RT_TABLE = 200; // Start at table 200
 
+type DeviceKind = 'default' | 'external' | 'client';
+
 interface DeviceGroup {
   device: string;
   clientIps: string[];
   fwmark: string;
   rtTable: number;
+  kind: DeviceKind;
+  clientGatewayIp?: string;
 }
 
 /**
@@ -121,7 +208,7 @@ export async function discoverExitNodes(): Promise<string[]> {
     const configs = files
       .filter((file) => file.endsWith('.conf'))
       .map((file) => file.replace('.conf', ''));
-    
+
     // Filter to only include devices that are up and have IPs
     const activeDevices: string[] = [];
     for (const device of configs) {
@@ -133,9 +220,15 @@ export async function discoverExitNodes(): Promise<string[]> {
         EGRESS_DEBUG(`Device ${device} excluded: up=${isUp}, hasIp=${hasIp}`);
       }
     }
-    
-    EGRESS_DEBUG(`Discovered ${activeDevices.length} active exit nodes: ${activeDevices.join(', ')}`);
-    return activeDevices;
+
+    const exitNodeClients = await getExitNodeClients();
+    const clientDevices = exitNodeClients.map(formatClientExitNodeDevice);
+
+    const allDevices = [...activeDevices, ...clientDevices];
+    EGRESS_DEBUG(
+      `Discovered ${allDevices.length} active exit nodes: ${allDevices.join(', ')}`
+    );
+    return allDevices;
   } catch (error) {
     EGRESS_DEBUG('Failed to discover exit nodes:', error);
     return [];
@@ -162,8 +255,8 @@ async function isDeviceUp(device: string): Promise<boolean> {
 export async function bringUpExitNodes(devices: string[]): Promise<void> {
   for (const device of devices) {
     // Skip the special 'default' device - it uses server's default gateway
-    if (device === 'default') {
-      EGRESS_DEBUG('Skipping default device - uses server default routing');
+    if (device === 'default' || parseClientExitNodeDevice(device) !== null) {
+      EGRESS_DEBUG('Skipping default/client exit node - uses server routing');
       continue;
     }
 
@@ -188,7 +281,7 @@ export async function bringUpExitNodes(devices: string[]): Promise<void> {
  * Group clients by their egress device
  * Returns map of device -> client IPs, including 'default' for null device clients
  */
-function groupClientsByDevice(clients: any[]): Map<string, string[]> {
+function groupClientsByDevice(clients: DbClient[]): Map<string, string[]> {
   const groups = new Map<string, string[]>();
 
   for (const client of clients) {
@@ -210,13 +303,41 @@ function groupClientsByDevice(clients: any[]): Map<string, string[]> {
 /**
  * Assign unique fwmark and routing table to each device
  */
-function assignDeviceParams(devices: string[]): DeviceGroup[] {
-  return devices.map((device, index) => ({
-    device,
-    clientIps: [], // Will be filled later
-    fwmark: `0x${(BASE_FWMARK + index).toString(16)}`,
-    rtTable: BASE_RT_TABLE + index,
-  }));
+function assignDeviceParams(
+  devices: string[],
+  exitNodeClientsById: Map<number, DbClient>
+): DeviceGroup[] {
+  const groups: DeviceGroup[] = [];
+
+  devices.forEach((device, index) => {
+    let kind: DeviceKind = 'external';
+    let clientGatewayIp: string | undefined;
+
+    if (device === 'default') {
+      kind = 'default';
+    } else {
+      const clientId = parseClientExitNodeDevice(device);
+      if (clientId !== null) {
+        const exitNodeClient = exitNodeClientsById.get(clientId);
+        if (!exitNodeClient) {
+          return;
+        }
+        kind = 'client';
+        clientGatewayIp = exitNodeClient.ipv4Address;
+      }
+    }
+
+    groups.push({
+      device,
+      clientIps: [],
+      fwmark: `0x${(BASE_FWMARK + index).toString(16)}`,
+      rtTable: BASE_RT_TABLE + index,
+      kind,
+      clientGatewayIp,
+    });
+  });
+
+  return groups;
 }
 
 /**
@@ -227,6 +348,9 @@ export async function generateEgressPostUpScript(
   wgSubnet: string
 ): Promise<string> {
   const clients = await Database.clients.getAll();
+  const exitNodeClientsById = new Map(
+    (await getExitNodeClients()).map((client) => [client.id, client])
+  );
   const clientGroups = groupClientsByDevice(clients);
 
   if (clientGroups.size === 0) {
@@ -243,7 +367,7 @@ export async function generateEgressPostUpScript(
 
   // Get unique devices
   const devices = Array.from(clientGroups.keys());
-  const deviceGroups = assignDeviceParams(devices);
+  const deviceGroups = assignDeviceParams(devices, exitNodeClientsById);
 
   // Fill in client IPs for each group
   for (const group of deviceGroups) {
@@ -271,6 +395,9 @@ export async function generateEgressPostUpScript(
  */
 export async function generateEgressPreDownScript(): Promise<string> {
   const clients = await Database.clients.getAll();
+  const exitNodeClientsById = new Map(
+    (await getExitNodeClients()).map((client) => [client.id, client])
+  );
   const clientGroups = groupClientsByDevice(clients);
 
   if (clientGroups.size === 0) {
@@ -283,13 +410,13 @@ export async function generateEgressPreDownScript(): Promise<string> {
   }
 
   const devices = Array.from(clientGroups.keys());
-  const deviceGroups = assignDeviceParams(devices);
+  const deviceGroups = assignDeviceParams(devices, exitNodeClientsById);
 
   let scriptContent = '#!/usr/bin/env bash\nset -e\n\n';
-  
+
   // Delete nftables table
   scriptContent += 'nft delete table ip wg_egress_nat 2>/dev/null || true\n\n';
-  
+
   // Remove policy routing rules
   for (const group of deviceGroups) {
     scriptContent += `ip rule del fwmark ${group.fwmark} table ${group.rtTable} 2>/dev/null || true\n`;
@@ -311,27 +438,41 @@ function generateNftablesEgressScript(
   deviceGroups: DeviceGroup[]
 ): string {
   let script = '';
-  
+
   // Start with validation and building arrays of valid device data
   script += `# Validate exit nodes\n`;
   script += `declare -A DEVICE_FWMARK\n`;
   script += `declare -A DEVICE_TABLE\n`;
   script += `declare -A DEVICE_IPS\n`;
+  script += `declare -A CLIENT_FWMARK\n`;
+  script += `declare -A CLIENT_TABLE\n`;
+  script += `declare -A CLIENT_IPS\n`;
   script += `DEFAULT_DEVICE_IPS=""\n\n`;
-  
+
   for (const group of deviceGroups) {
     if (group.clientIps.length === 0) continue;
-    
+
     const ipList = group.clientIps.join(' ');
-    
+
     // Handle 'default' device specially - uses server's default routing
-    if (group.device === 'default') {
+    if (group.kind === 'default') {
       script += `# Configure default device routing\n`;
       script += `echo "Setting up default egress for ${group.clientIps.length} client(s)"\n`;
       script += `DEFAULT_DEVICE_IPS="${ipList}"\n\n`;
       continue;
     }
-    
+
+    if (group.kind === 'client') {
+      script += `# Configure exit node client ${group.device}\n`;
+      script += `echo "Exit node client ${group.device} is configured"\n`;
+      script += `CLIENT_FWMARK["${group.device}"]="${group.fwmark}"\n`;
+      script += `CLIENT_TABLE["${group.device}"]="${group.rtTable}"\n`;
+      script += `CLIENT_IPS["${group.device}"]="${ipList}"\n`;
+      script += `ip rule add fwmark ${group.fwmark} table ${group.rtTable} 2>/dev/null || true\n`;
+      script += `ip route replace default via ${group.clientGatewayIp} dev ${interfaceId} table ${group.rtTable}\n\n`;
+      continue;
+    }
+
     script += `# Check ${group.device}\n`;
     script += `if wg show ${group.device} &>/dev/null && ip addr show ${group.device} | grep -q 'inet '; then\n`;
     script += `  echo "Exit node ${group.device} is active"\n`;
@@ -344,9 +485,9 @@ function generateNftablesEgressScript(
     script += `  echo "WARNING: Exit node ${group.device} is not available. Skipping." >&2\n`;
     script += `fi\n\n`;
   }
-  
+
   // Check if any egress is configured (either custom devices or default)
-  script += `if [ \${#DEVICE_FWMARK[@]} -eq 0 ] && [ -z "$DEFAULT_DEVICE_IPS" ]; then\n`;
+  script += `if [ \${#DEVICE_FWMARK[@]} -eq 0 ] && [ \${#CLIENT_FWMARK[@]} -eq 0 ] && [ -z "$DEFAULT_DEVICE_IPS" ]; then\n`;
   script += `  echo "WARNING: No egress routing configured." >&2\n`;
   script += `  exit 0\n`;
   script += `fi\n\n`;
@@ -372,6 +513,14 @@ function generateNftablesEgressScript(
   script += `    ips_formatted=$(echo "\$ips" | sed 's/ /, /g')\n`;
   script += `    echo "  set \${setname} { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
   script += `  done\n`;
+  script += `  \n`;
+  script += `  # Client exit node IP sets\n`;
+  script += `  for device in "\${!CLIENT_IPS[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    ips=\${CLIENT_IPS[$device]}\n`;
+  script += `    ips_formatted=$(echo "\$ips" | sed 's/ /, /g')\n`;
+  script += `    echo "  set \${setname} { type ipv4_addr; elements = { \${ips_formatted} } }"\n`;
+  script += `  done\n`;
   script += `  echo ""\n`;
   script += `  \n`;
   script += `  # Prerouting chain - mark packets for policy routing\n`;
@@ -382,7 +531,14 @@ function generateNftablesEgressScript(
   script += `  for device in "\${!DEVICE_FWMARK[@]}"; do\n`;
   script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
   script += `    fwmark=\${DEVICE_FWMARK[$device]}\n`;
-  script += `    echo "    iifname \\"${interfaceId}\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
+  script += `    echo "    iifname \\\"${interfaceId}\\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
+  script += `  done\n`;
+  script += `  \n`;
+  script += `  # Client exit nodes get marked for policy routing\n`;
+  script += `  for device in "\${!CLIENT_FWMARK[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    fwmark=\${CLIENT_FWMARK[$device]}\n`;
+  script += `    echo "    iifname \\\"${interfaceId}\\\" ip saddr @\${setname} ip daddr != ${wgSubnet} meta mark set \${fwmark}"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Default device clients - no marking needed, use normal routing\n`;
@@ -396,7 +552,13 @@ function generateNftablesEgressScript(
   script += `  # Allow forwarding for custom exit nodes\n`;
   script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
   script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
-  script += `    echo "    iifname \\"${interfaceId}\\" oifname \\"\${device}\\" ip saddr @\${setname} accept"\n`;
+  script += `    echo "    iifname \\\"${interfaceId}\\\" oifname \\\"\${device}\\\" ip saddr @\${setname} accept"\n`;
+  script += `  done\n`;
+  script += `  \n`;
+  script += `  # Allow forwarding for client exit nodes (via WireGuard interface)\n`;
+  script += `  for device in "\${!CLIENT_IPS[@]}"; do\n`;
+  script += `    setname=$(echo "clients_\${device}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
+  script += `    echo "    iifname \\\"${interfaceId}\\\" oifname \\\"${interfaceId}\\\" ip saddr @\${setname} accept"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # Allow forwarding for default device (to default interface)\n`;
@@ -405,7 +567,7 @@ function generateNftablesEgressScript(
   script += `    DEFAULT_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -1)\n`;
   script += `    if [ -n "$DEFAULT_IFACE" ]; then\n`;
   script += `      echo "    # Forward default egress clients via \${DEFAULT_IFACE}"\n`;
-  script += `      echo "    iifname \\"${interfaceId}\\" oifname \\"\${DEFAULT_IFACE}\\" ip saddr @clients_default accept"\n`;
+  script += `      echo "    iifname \\\"${interfaceId}\\\" oifname \\\"\${DEFAULT_IFACE}\\\" ip saddr @clients_default accept"\n`;
   script += `    fi\n`;
   script += `  fi\n`;
   script += `  \n`;
@@ -418,7 +580,7 @@ function generateNftablesEgressScript(
   script += `  \n`;
   script += `  # NAT for custom exit nodes\n`;
   script += `  for device in "\${!DEVICE_IPS[@]}"; do\n`;
-  script += `    echo "    oifname \\"\${device}\\" masquerade"\n`;
+  script += `    echo "    oifname \\\"\${device}\\\" masquerade"\n`;
   script += `  done\n`;
   script += `  \n`;
   script += `  # NAT for default device\n`;
@@ -426,7 +588,7 @@ function generateNftablesEgressScript(
   script += `    DEFAULT_IFACE=$(ip route show default | awk '/default/ {print $5}' | head -1)\n`;
   script += `    if [ -n "$DEFAULT_IFACE" ]; then\n`;
   script += `      echo "    # NAT for default egress via \${DEFAULT_IFACE}"\n`;
-  script += `      echo "    oifname \\"\${DEFAULT_IFACE}\\" ip saddr @clients_default masquerade"\n`;
+  script += `      echo "    oifname \\\"\${DEFAULT_IFACE}\\\" ip saddr @clients_default masquerade"\n`;
   script += `    fi\n`;
   script += `  fi\n`;
   script += `  \n`;
@@ -434,7 +596,6 @@ function generateNftablesEgressScript(
   script += `  \n`;
   script += `  echo "}"\n`;
   script += `} | nft -f -\n`;
-
   return script;
 }
 

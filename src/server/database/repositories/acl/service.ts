@@ -92,6 +92,8 @@ export class AclService {
         .values({
           id: interfaceId,
           enabled: false,
+          allowPublicEgress: false,
+          exitNodeClientId: null,
           filterTableName: 'wg_acl_v4',
           defaultPolicy: 'drop',
         })

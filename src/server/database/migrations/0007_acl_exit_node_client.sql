@@ -1,0 +1,1 @@
+ALTER TABLE `acl_config_table` ADD `exit_node_client_id` integer;

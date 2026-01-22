@@ -15,6 +15,38 @@
           />
         </FormGroup>
         <FormGroup>
+          <FormSwitchField
+            id="acl-allow-public-egress"
+            v-model="config.allowPublicEgress"
+            :label="$t('acl.allowPublicEgress')"
+            :description="$t('acl.allowPublicEgressDescription')"
+          />
+        </FormGroup>
+        <FormGroup>
+          <div class="mb-2 flex items-center gap-2">
+            <label for="acl-exit-node-client" class="block text-sm font-medium text-gray-700 dark:text-neutral-300">
+              {{ $t('acl.exitNodeClient') }}
+            </label>
+            <BaseTooltip :text="$t('acl.exitNodeClientDescription')">
+              <IconsInfo class="size-4 text-gray-500 dark:text-neutral-400" />
+            </BaseTooltip>
+          </div>
+          <select
+            id="acl-exit-node-client"
+            v-model="config.exitNodeClientId"
+            class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
+          >
+            <option :value="null">{{ $t('acl.exitNodeClientNone') }}</option>
+            <option
+              v-for="client in (clients || []).filter(c => c.isExitNode)"
+              :key="client.id"
+              :value="client.id"
+            >
+              {{ client.name }} ({{ client.ipv4Address }})
+            </option>
+          </select>
+        </FormGroup>
+        <FormGroup>
           <FormPrimaryActionField
             type="submit"
             :label="$t('form.save')"

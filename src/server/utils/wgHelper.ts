@@ -7,6 +7,7 @@ import type { HooksType } from '#db/repositories/hooks/types';
 
 type Options = {
   enableIpv6?: boolean;
+  activeExitNodeClientId?: number | null;
 };
 
 const wgExecutable = WG_ENV.WG_EXECUTABLE;
@@ -16,13 +17,22 @@ export const wg = {
     client: Omit<ClientType, 'createdAt' | 'updatedAt'>,
     options: Options = {}
   ) => {
-    const { enableIpv6 = true } = options;
+    const { enableIpv6 = true, activeExitNodeClientId = null } = options;
 
     const allowedIps = [
       `${client.ipv4Address}/32`,
       ...(enableIpv6 ? [`${client.ipv6Address}/128`] : []),
       ...(client.serverAllowedIps ?? []),
     ];
+
+    if (client.isExitNode && client.id === activeExitNodeClientId) {
+      if (!allowedIps.includes('0.0.0.0/0')) {
+        allowedIps.push('0.0.0.0/0');
+      }
+      if (enableIpv6 && !allowedIps.includes('::/0')) {
+        allowedIps.push('::/0');
+      }
+    }
 
     const extraLines = [];
     if (client.serverEndpoint) {

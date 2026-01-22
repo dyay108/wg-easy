@@ -60,6 +60,7 @@ class WireGuard {
     // Check if ACL is enabled
     const aclConfig = await Database.acl.getConfig(wgInterface.name);
     const aclEnabled = aclConfig.enabled;
+    const activeExitNodeClientId = aclConfig.exitNodeClientId ?? null;
 
     // Generate ACL scripts and inject into hooks
     const aclPostUp = await generatePostUpScript(
@@ -140,6 +141,7 @@ class WireGuard {
       result.push(
         wg.generateServerPeer(client, {
           enableIpv6: !WG_ENV.DISABLE_IPV6,
+          activeExitNodeClientId,
         })
       );
     }
