@@ -61,6 +61,7 @@ class WireGuard {
     const aclConfig = await Database.acl.getConfig(wgInterface.name);
     const aclEnabled = aclConfig.enabled;
     const activeExitNodeClientId = aclConfig.exitNodeClientId ?? null;
+    const tableOff = !!activeExitNodeClientId;
 
     // Generate ACL scripts and inject into hooks
     const aclPostUp = await generatePostUpScript(
@@ -81,6 +82,31 @@ class WireGuard {
     // Split hook strings into arrays of commands (one per line)
     const postUpCommands = hooks.postUp.split('\n').filter(cmd => cmd.trim());
     const postDownCommands = hooks.postDown.split('\n').filter(cmd => cmd.trim());
+
+    // When Table=off is used, manually add routes for serverAllowedIps
+    if (tableOff) {
+      const routeCidrs = new Set<string>();
+      for (const client of clients) {
+        for (const cidr of client.serverAllowedIps ?? []) {
+          if (
+            cidr === '0.0.0.0/0' ||
+            cidr === '::/0' ||
+            cidr === wgInterface.ipv4Cidr ||
+            cidr === wgInterface.ipv6Cidr
+          ) {
+            continue;
+          }
+          routeCidrs.add(cidr);
+        }
+      }
+
+      for (const cidr of routeCidrs) {
+        const isIpv6 = cidr.includes(':');
+        const ipFlag = isIpv6 ? '-6' : '-4';
+        postUpCommands.push(`ip ${ipFlag} route replace ${cidr} dev ${wgInterface.name}`);
+        postDownCommands.push(`ip ${ipFlag} route del ${cidr} dev ${wgInterface.name} 2>/dev/null || true`);
+      }
+    }
     
     // If ACL is enabled, remove blanket FORWARD ACCEPT rules that would bypass ACL
     if (aclEnabled) {
@@ -131,6 +157,7 @@ class WireGuard {
     result.push(
       wg.generateServerInterface(wgInterface, enhancedHooks, {
         enableIpv6: !WG_ENV.DISABLE_IPV6,
+        tableOff,
       })
     );
 

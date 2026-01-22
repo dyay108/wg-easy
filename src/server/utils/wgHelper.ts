@@ -8,6 +8,7 @@ import type { HooksType } from '#db/repositories/hooks/types';
 type Options = {
   enableIpv6?: boolean;
   activeExitNodeClientId?: number | null;
+  tableOff?: boolean;
 };
 
 const wgExecutable = WG_ENV.WG_EXECUTABLE;
@@ -51,7 +52,7 @@ AllowedIPs = ${allowedIps.join(', ')}${extraLines.length ? `\n${extraLines.join(
     hooks: HooksType,
     options: Options = {}
   ) => {
-    const { enableIpv6 = true } = options;
+    const { enableIpv6 = true, tableOff = false } = options;
 
     const cidr4 = parseCidr(wgInterface.ipv4Cidr);
     const cidr6 = parseCidr(wgInterface.ipv6Cidr);
@@ -106,7 +107,7 @@ PrivateKey = ${wgInterface.privateKey}
 Address = ${address}
 ListenPort = ${wgInterface.port}
 MTU = ${wgInterface.mtu}
-${extraLines.length ? `${extraLines.join('\n')}\n` : ''}${preUpLines.join('\n')}${preUpLines.length ? '\n' : ''}${postUpLines.join('\n')}${postUpLines.length ? '\n' : ''}${preDownLines.join('\n')}${preDownLines.length ? '\n' : ''}${postDownLines.join('\n')}`;
+${tableOff ? 'Table = off\n' : ''}${extraLines.length ? `${extraLines.join('\n')}\n` : ''}${preUpLines.join('\n')}${preUpLines.length ? '\n' : ''}${postUpLines.join('\n')}${postUpLines.length ? '\n' : ''}${preDownLines.join('\n')}${preDownLines.length ? '\n' : ''}${postDownLines.join('\n')}`;
   },
 
   generateClientConfig: (
