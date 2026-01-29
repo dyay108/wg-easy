@@ -55,5 +55,5 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:latest \
+          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:test \
             $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)
