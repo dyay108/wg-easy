@@ -17,6 +17,7 @@ RUN apk add --no-cache \
     nftables \
     kmod \
     iptables-legacy \
+    wireguard-go \
     wireguard-tools
 
 # Use iptables-legacy
