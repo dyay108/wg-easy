@@ -377,10 +377,25 @@ export async function generateEgressPostUpScript(
   // Bring up exit nodes first
   await bringUpExitNodes(devices);
 
+  const serverAllowedIps = new Set<string>();
+  for (const client of clients) {
+    for (const cidr of client.serverAllowedIps ?? []) {
+      if (
+        cidr === '0.0.0.0/0' ||
+        cidr === wgSubnet ||
+        cidr.includes(':')
+      ) {
+        continue;
+      }
+      serverAllowedIps.add(cidr);
+    }
+  }
+
   const scriptContent = generateNftablesEgressScript(
     interfaceId,
     wgSubnet,
-    deviceGroups
+    deviceGroups,
+    Array.from(serverAllowedIps)
   );
 
   const fullScript = `#!/usr/bin/env bash\nset -e\n\n${scriptContent}`;
@@ -435,7 +450,8 @@ export async function generateEgressPreDownScript(): Promise<string> {
 function generateNftablesEgressScript(
   interfaceId: string,
   wgSubnet: string,
-  deviceGroups: DeviceGroup[]
+  deviceGroups: DeviceGroup[],
+  serverAllowedIps: string[]
 ): string {
   const escapedQuote = String.fromCharCode(92, 34);
   const bashVar = (name: string) => '${' + name + '}';
@@ -508,6 +524,11 @@ function generateNftablesEgressScript(
   script += `    echo "  set clients_default { type ipv4_addr; elements = { ${bashVar('ips_formatted')} } }"\n`;
   script += `  fi\n`;
   script += `  \n`;
+  script += `  # Server-allowed IPs (bypass egress marking)\n`;
+  script += `  if [ -n "${serverAllowedIps.join(' ')}" ]; then\n`;
+  script += `    echo "  set server_allowed_ips { type ipv4_addr; flags interval; elements = { ${serverAllowedIps.join(', ')} } }"\n`;
+  script += `  fi\n`;
+  script += `  \n`;
   script += `  # Custom exit node IP sets\n`;
   script += `  for device in "${bashVar('!DEVICE_IPS[@]')}"; do\n`;
   script += `    setname=$(echo "clients_${bashVar('device')}" | sed 's/[^a-zA-Z0-9]/_/g')\n`;
@@ -528,6 +549,11 @@ function generateNftablesEgressScript(
   script += `  # Prerouting chain - mark packets for policy routing\n`;
   script += `  echo "  chain prerouting {"\n`;
   script += `  echo "    type filter hook prerouting priority -149;"\n`;
+  script += `  \n`;
+  script += `  # Skip marking traffic destined to server-allowed IPs\n`;
+  script += `  if [ -n "${serverAllowedIps.join(' ')}" ]; then\n`;
+  script += `    echo "    ip daddr @server_allowed_ips return"\n`;
+  script += `  fi\n`;
   script += `  \n`;
   script += `  # Custom exit nodes get marked for policy routing\n`;
   script += `  for device in "${bashVar('!DEVICE_FWMARK[@]')}"; do\n`;
