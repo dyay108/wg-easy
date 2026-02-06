@@ -21,25 +21,9 @@ const formatClientExitNodeDevice = (client: DbClient): string => {
   return `${CLIENT_EXIT_NODE_PREFIX}${client.id}:${safeName}`;
 };
 
-const getActiveExitNodeClientId = async (): Promise<number | null> => {
-  const config = await Database.acl.getConfig('wg0');
-  return config.exitNodeClientId ?? null;
-};
-
 const getExitNodeClients = async (): Promise<DbClient[]> => {
-  const [clients, activeExitNodeClientId] = await Promise.all([
-    Database.clients.getAll(),
-    getActiveExitNodeClientId(),
-  ]);
-  if (activeExitNodeClientId === null) {
-    return [];
-  }
-  return clients.filter(
-    (client) =>
-      client.enabled &&
-      client.isExitNode &&
-      client.id === activeExitNodeClientId
-  );
+  const clients = await Database.clients.getAll();
+  return clients.filter((client) => client.enabled && client.isExitNode);
 };
 
 /**
@@ -200,16 +184,13 @@ async function hasIpAddress(device: string): Promise<boolean> {
 
 /**
  * Discover available exit node configs in /etc/wireguard/exit_nodes/
- * Returns list of device names that are UP and have IP addresses
+ * Returns list of external devices that are UP with IPs plus client exit nodes
  */
 export async function discoverExitNodes(): Promise<string[]> {
   try {
-    const files = await fs.readdir(EXIT_NODES_DIR);
-    const configs = files
-      .filter((file) => file.endsWith('.conf'))
-      .map((file) => file.replace('.conf', ''));
+    const configs = await getAllExitNodeConfigs();
 
-    // Filter to only include devices that are up and have IPs
+    // Filter to only include external devices that are up and have IPs
     const activeDevices: string[] = [];
     for (const device of configs) {
       const isUp = await isDeviceUp(device);
