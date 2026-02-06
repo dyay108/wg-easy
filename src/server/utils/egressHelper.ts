@@ -21,9 +21,25 @@ const formatClientExitNodeDevice = (client: DbClient): string => {
   return `${CLIENT_EXIT_NODE_PREFIX}${client.id}:${safeName}`;
 };
 
+const getActiveExitNodeClientId = async (): Promise<number | null> => {
+  const config = await Database.acl.getConfig('wg0');
+  return config.exitNodeClientId ?? null;
+};
+
 const getExitNodeClients = async (): Promise<DbClient[]> => {
-  const clients = await Database.clients.getAll();
-  return clients.filter((client) => client.enabled && client.isExitNode);
+  const [clients, activeExitNodeClientId] = await Promise.all([
+    Database.clients.getAll(),
+    getActiveExitNodeClientId(),
+  ]);
+  if (activeExitNodeClientId === null) {
+    return [];
+  }
+  return clients.filter(
+    (client) =>
+      client.enabled &&
+      client.isExitNode &&
+      client.id === activeExitNodeClientId
+  );
 };
 
 /**
