@@ -2,7 +2,9 @@
   <main v-if="data">
     <Panel>
       <PanelHead>
-        <PanelHeadTitle :text="data.name" />
+        <PanelHeadTitle>
+          {{ data.name }}
+        </PanelHeadTitle>
       </PanelHead>
       <PanelBody>
         <FormElement @submit.prevent="submit">
@@ -67,6 +69,12 @@
               {{ $t('client.exitNodeEffectiveAllowedIps') }}
             </p>
           </FormGroup>
+          <FormGroup v-if="globalStore.information?.firewallEnabled">
+            <FormHeading :description="$t('client.firewallIpsDesc')">
+              {{ $t('client.firewallIps') }}
+            </FormHeading>
+            <FormNullArrayField v-model="data.firewallIps" name="firewallIps" />
+          </FormGroup>
           <FormGroup>
             <FormHeading :description="$t('client.dnsDesc')">
               {{ $t('general.dns') }}
@@ -112,8 +120,14 @@
                 v-model="data.egressDevice"
                 class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
               >
-                <option :value="null">{{ $t('client.egressDeviceDefault') }}</option>
-                <option v-for="device in filteredExitNodes" :key="device" :value="device">
+                <option :value="null">
+                  {{ $t('client.egressDeviceDefault') }}
+                </option>
+                <option
+                  v-for="device in filteredExitNodes"
+                  :key="device"
+                  :value="device"
+                >
                   {{ device }}
                 </option>
               </select>
@@ -124,18 +138,33 @@
               :label="$t('client.isExitNode')"
               :description="$t('client.isExitNodeDesc')"
             />
-            <div v-if="data.isExitNode" class="col-span-full space-y-4 rounded-lg border-2 border-gray-100 p-4 dark:border-neutral-800">
+            <div
+              v-if="data.isExitNode"
+              class="col-span-full space-y-4 rounded-lg border-2 border-gray-100 p-4 dark:border-neutral-800"
+            >
               <div>
-                <p class="mb-2 text-sm font-medium text-gray-700 dark:text-neutral-300">
+                <p
+                  class="mb-2 text-sm font-medium text-gray-700 dark:text-neutral-300"
+                >
                   {{ $t('client.isExitNodePostUp') }}
                 </p>
-                <pre class="overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE</pre>
+                <pre
+                  class="overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                >
+iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth+ -j MASQUERADE</pre
+                >
               </div>
               <div>
-                <p class="mb-2 text-sm font-medium text-gray-700 dark:text-neutral-300">
+                <p
+                  class="mb-2 text-sm font-medium text-gray-700 dark:text-neutral-300"
+                >
                   {{ $t('client.isExitNodePostDown') }}
                 </p>
-                <pre class="overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE</pre>
+                <pre
+                  class="overflow-x-auto rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-800 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
+                >
+iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth+ -j MASQUERADE</pre
+                >
               </div>
             </div>
           </FormGroup>
@@ -198,25 +227,25 @@
             <FormHeading :description="$t('client.hooksDescription')">
               {{ $t('client.hooks') }}
             </FormHeading>
-            <FormTextField
+            <FormTextArea
               id="PreUp"
               v-model="data.preUp"
               :description="$t('client.hooksLeaveEmpty')"
               :label="$t('hooks.preUp')"
             />
-            <FormTextField
+            <FormTextArea
               id="PostUp"
               v-model="data.postUp"
               :description="$t('client.hooksLeaveEmpty')"
               :label="$t('hooks.postUp')"
             />
-            <FormTextField
+            <FormTextArea
               id="PreDown"
               v-model="data.preDown"
               :description="$t('client.hooksLeaveEmpty')"
               :label="$t('hooks.preDown')"
             />
-            <FormTextField
+            <FormTextArea
               id="PostDown"
               v-model="data.postDown"
               :description="$t('client.hooksLeaveEmpty')"
@@ -237,9 +266,7 @@
             >
               <FormSecondaryActionField
                 :label="$t('client.delete')"
-                class="w-full"
-                type="button"
-                tabindex="-1"
+                class="inline-block w-full"
                 as="span"
               />
             </ClientsDeleteDialog>
@@ -249,9 +276,7 @@
             >
               <FormSecondaryActionField
                 :label="$t('client.viewConfig')"
-                class="w-full"
-                type="button"
-                tabindex="-1"
+                class="inline-block w-full"
                 as="span"
               />
             </ClientsConfigDialog>
@@ -274,9 +299,12 @@ const { data: _data, refresh } = await useFetch(`/api/client/${id}`, {
 const data = toRef(_data.value);
 
 // Fetch available exit nodes
-const { data: exitNodes } = await useFetch<string[]>('/api/admin/egress/devices', {
-  method: 'get',
-});
+const { data: exitNodes } = await useFetch<string[]>(
+  '/api/admin/egress/devices',
+  {
+    method: 'get',
+  }
+);
 
 const { data: aclConfig } = await useFetch('/api/admin/acl/config', {
   method: 'get',
@@ -306,14 +334,18 @@ const filteredExitNodes = computed(() => {
   }
 
   const prefix = `client:${currentClientId}:`;
-  return devices.filter((device) => !device.startsWith(prefix) && device !== `client:${currentClientId}`);
+  return devices.filter(
+    (device) =>
+      !device.startsWith(prefix) && device !== `client:${currentClientId}`
+  );
 });
 
 const _submit = useSubmit(
-  `/api/client/${id}`,
-  {
-    method: 'post',
-  },
+  (data) =>
+    $fetch(`/api/client/${id}`, {
+      method: 'post',
+      body: data,
+    }),
   {
     revert: async (success) => {
       if (success) {
@@ -335,10 +367,11 @@ async function revert() {
 }
 
 const _deleteClient = useSubmit(
-  `/api/client/${id}`,
-  {
-    method: 'delete',
-  },
+  (data) =>
+    $fetch(`/api/client/${id}`, {
+      method: 'delete',
+      body: data,
+    }),
   {
     revert: async () => {
       await navigateTo('/');

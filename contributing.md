@@ -2,19 +2,22 @@
 
 First and foremost, thank you! We appreciate that you want to contribute to wg-easy, your time is valuable, and your contributions mean a lot to us.
 
-
 ## Important!
 
 By contributing to this project, you:
 
-* Agree that you have authored 100% of the content
-* Agree that you have the necessary rights to the content
-* Agree that you have received the necessary permissions from your employer to make the contributions (if applicable)
-* Agree that the content you contribute may be provided under the Project license(s)
-* Agree that, if you did not author 100% of the content, the appropriate licenses and copyrights have been added along with any other necessary attribution.
-
+- Agree that you have authored 100% of the content
+- Agree that you have the necessary rights to the content
+- Agree that you have received the necessary permissions from your employer to make the contributions (if applicable)
+- Agree that the content you contribute may be provided under the Project license(s)
+- Agree that, if you did not author 100% of the content, the appropriate licenses and copyrights have been added along with any other necessary attribution.
 
 ## Getting started
+
+> Working on the ACL / client-groups / egress features on this branch? Start
+> with [`HANDOFF.md`](./HANDOFF.md) — it covers the architecture, the ACL
+> generation model, the hand-written migration convention, the security model,
+> and local dev/testing notes.
 
 **What does "contributing" mean?**
 
@@ -24,7 +27,6 @@ Creating an issue is the simplest form of contributing to a project. But there a
 - Feature requests
 - Bug reports
 
-
 ## Showing support for wg-easy
 
 Please keep in mind that open source software is built by people like you, who spend their free time creating things the rest the community can use.
@@ -33,7 +35,6 @@ Don't have time to contribute? No worries, here are some other ways to show your
 
 - star the [project](https://github.com/wg-easy/wg-easy)
 - tweet your support for wg-easy
-
 
 ## Issues
 
@@ -71,7 +72,6 @@ Please be as descriptive as possible when creating an issue. Give us the informa
 - **error messages**: (required) please paste any error messages into the issue, or a [gist](https://gist.github.com/)
 - **extensions, plugins, helpers, etc** (if applicable): please list any extensions you're using
 
-
 ### Closing issues
 
 The original poster or the maintainers of wg-easy may close an issue at any time. Typically, but not exclusively, issues are closed when:
@@ -80,7 +80,6 @@ The original poster or the maintainers of wg-easy may close an issue at any time
 - The project's maintainers have determined the issue is out of scope
 - An issue is clearly a duplicate of another issue, in which case the duplicate issue will be linked.
 - A discussion has clearly run its course
-
 
 ## Next steps
 

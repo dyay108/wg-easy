@@ -15,6 +15,7 @@ export default defineNuxtConfig({
     'radix-vue/nuxt',
     '@vueuse/nuxt',
     '@nuxt/eslint',
+    '@nuxt/test-utils/module',
   ],
   colorMode: {
     preference: 'system',
@@ -22,6 +23,7 @@ export default defineNuxtConfig({
     classSuffix: '',
     cookieName: 'theme',
   },
+  css: ['~/app.css'],
   i18n: {
     // https://i18n.nuxtjs.org/docs/guide/server-side-translations
     experimental: {
@@ -48,6 +50,11 @@ export default defineNuxtConfig({
         code: 'it',
         language: 'it-IT',
         name: 'Italiano',
+      },
+      {
+        code: 'ja',
+        language: 'ja-JP',
+        name: '日本語',
       },
       {
         code: 'fr',
@@ -90,6 +97,11 @@ export default defineNuxtConfig({
         name: 'Polski',
       },
       {
+        code: 'cs',
+        language: 'cs-CZ',
+        name: 'Čeština',
+      },
+      {
         code: 'pt-BR',
         language: 'pt-BR',
         name: 'Português (Brasil)',
@@ -118,6 +130,26 @@ export default defineNuxtConfig({
         code: 'nb',
         language: 'nb-NO',
         name: 'Norsk bokmål',
+      },
+      {
+        code: 'bg',
+        language: 'bg-BG',
+        name: 'Български',
+      },
+      {
+        code: 'hi',
+        language: 'hi-IN',
+        name: 'हिन्दी',
+      },
+      {
+        code: 'gl',
+        language: 'gl-ES',
+        name: 'Galego',
+      },
+      {
+        code: 'vi',
+        language: 'vi-VN',
+        name: 'Tiếng Việt',
       },
     ],
     defaultLocale: 'en',

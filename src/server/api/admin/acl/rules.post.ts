@@ -8,10 +8,10 @@ export default definePermissionEventHandler(
       event,
       validateZod(AclRuleCreateSchema, event)
     );
-    
+
     const rule = await Database.acl.createRule(data);
     await WireGuard.saveConfig();
-    
+
     return rule;
   }
 );

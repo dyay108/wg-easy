@@ -1,12 +1,23 @@
 import fs from 'node:fs/promises';
-import debug from 'debug';
+import { createDebug } from 'obug';
 import { exec } from './cmd';
 
-const EGRESS_DEBUG = debug('Egress');
+const EGRESS_DEBUG = createDebug('Egress');
 const EXIT_NODES_DIR = '/etc/wireguard/exit_nodes';
 const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
 const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
 const CLIENT_EXIT_NODE_PREFIX = 'client:';
+
+/**
+ * Egress device names are interpolated into a generated bash script. Only allow
+ * a strict charset (interface names and `client:<id>:<safe-name>`) so a value
+ * like `client:5:$(...)` can never reach the shell. This is the security
+ * backstop regardless of how the value was persisted.
+ */
+const SAFE_EGRESS_DEVICE = /^[A-Za-z0-9._:-]+$/;
+
+export const isSafeEgressDevice = (device: string): boolean =>
+  SAFE_EGRESS_DEVICE.test(device);
 
 const parseClientExitNodeDevice = (device: string): number | null => {
   const match = device.match(/^client:(\d+)(?::.*)?$/);
@@ -72,7 +83,9 @@ export async function validateClientEgressDevices(): Promise<void> {
     EGRESS_DEBUG('Validating client egress device assignments...');
     const availableExternalDevices = await getAllExitNodeConfigs();
     const exitNodeClients = await getExitNodeClients();
-    const exitNodeClientIds = new Set(exitNodeClients.map((client) => client.id));
+    const exitNodeClientIds = new Set(
+      exitNodeClients.map((client) => client.id)
+    );
     EGRESS_DEBUG('Available devices:', availableExternalDevices);
     const clients = await Database.clients.getAll();
 
@@ -101,6 +114,7 @@ export async function validateClientEgressDevices(): Promise<void> {
               postDown: client.postDown,
               allowedIps: client.allowedIps,
               serverAllowedIps: client.serverAllowedIps,
+              firewallIps: client.firewallIps,
               mtu: client.mtu,
               jC: client.jC,
               jMin: client.jMin,
@@ -117,7 +131,9 @@ export async function validateClientEgressDevices(): Promise<void> {
               egressDevice: null,
               isExitNode: client.isExitNode,
             });
-            EGRESS_DEBUG(`Successfully disabled egress for client ${client.id}`);
+            EGRESS_DEBUG(
+              `Successfully disabled egress for client ${client.id}`
+            );
           } catch (updateError) {
             EGRESS_DEBUG(`Failed to update client ${client.id}:`, updateError);
           }
@@ -143,6 +159,7 @@ export async function validateClientEgressDevices(): Promise<void> {
             postDown: client.postDown,
             allowedIps: client.allowedIps,
             serverAllowedIps: client.serverAllowedIps,
+            firewallIps: client.firewallIps,
             mtu: client.mtu,
             jC: client.jC,
             jMin: client.jMin,
@@ -287,6 +304,14 @@ function groupClientsByDevice(clients: DbClient[]): Map<string, string[]> {
       continue;
     }
 
+    // Never let an unsafe device name reach the generated shell script.
+    if (client.egressDevice && !isSafeEgressDevice(client.egressDevice)) {
+      EGRESS_DEBUG(
+        `Skipping client ${client.id}: unsafe egress device "${client.egressDevice}"`
+      );
+      continue;
+    }
+
     // Use 'default' as device name for clients with null egressDevice
     const device = client.egressDevice || 'default';
     const clientIps = groups.get(device) || [];
@@ -377,11 +402,7 @@ export async function generateEgressPostUpScript(
   const serverAllowedIps = new Set<string>();
   for (const client of clients) {
     for (const cidr of client.serverAllowedIps ?? []) {
-      if (
-        cidr === '0.0.0.0/0' ||
-        cidr === wgSubnet ||
-        cidr.includes(':')
-      ) {
+      if (cidr === '0.0.0.0/0' || cidr === wgSubnet || cidr.includes(':')) {
         continue;
       }
       serverAllowedIps.add(cidr);

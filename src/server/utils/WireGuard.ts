@@ -1,11 +1,23 @@
 import fs from 'node:fs/promises';
-import debug from 'debug';
-import { encodeQR } from 'qr';
-import { generatePostUpScript, generatePreDownScript, applyAclRules } from './aclHelper';
-import { generateEgressPostUpScript, generateEgressPreDownScript, applyEgressRules, bringUpExitNodes, getAllExitNodeConfigs, validateClientEgressDevices } from './egressHelper';
+import { createDebug } from 'obug';
+import {
+  generatePostUpScript,
+  generatePreDownScript,
+  applyAclRules,
+} from './aclHelper';
+import {
+  generateEgressPostUpScript,
+  generateEgressPreDownScript,
+  applyEgressRules,
+  bringUpExitNodes,
+  getAllExitNodeConfigs,
+  validateClientEgressDevices,
+} from './egressHelper';
+import { firewall } from './firewall';
+import { encodeQRCode } from './qr';
 import type { InterfaceType } from '#db/repositories/interface/types';
 
-const WG_DEBUG = debug('WireGuard');
+const WG_DEBUG = createDebug('WireGuard');
 
 const generateRandomHeaderValue = () =>
   Math.floor(Math.random() * 2147483642) + 5;
@@ -16,19 +28,21 @@ class WireGuard {
    */
   async saveConfig() {
     const wgInterface = await Database.interfaces.get();
-    
+
     // Validate client egress device assignments before regenerating config
     await validateClientEgressDevices();
-    
+
     // Bring up exit nodes before generating config
     await this.#ensureExitNodesUp();
-    
+
     await this.#saveWireguardConfig(wgInterface);
     await this.#syncWireguardConfig(wgInterface);
-    
+
+    await this.#applyFirewallRules(wgInterface);
+
     // Apply ACL rules immediately after syncing config
     await applyAclRules();
-    
+
     // Apply egress rules immediately after ACL
     await applyEgressRules();
   }
@@ -37,7 +51,7 @@ class WireGuard {
     try {
       // Get all exit node configs and bring them all up
       const allExitNodes = await getAllExitNodeConfigs();
-      
+
       if (allExitNodes.length > 0) {
         WG_DEBUG(`Ensuring all exit nodes are up: ${allExitNodes.join(', ')}`);
         await bringUpExitNodes(allExitNodes);
@@ -46,6 +60,20 @@ class WireGuard {
       WG_DEBUG('Error ensuring exit nodes are up:', error);
       throw error;
     }
+  }
+
+  /**
+   * Apply firewall rules based on current config
+   */
+  async #applyFirewallRules(wgInterface: InterfaceType) {
+    const clients = await Database.clients.getAll();
+    const userConfig = await Database.userConfigs.get();
+    await firewall.rebuildRules(
+      wgInterface,
+      clients,
+      userConfig,
+      !WG_ENV.DISABLE_IPV6
+    );
   }
 
   /**
@@ -75,13 +103,13 @@ class WireGuard {
       wgInterface.ipv4Cidr
     );
     const egressPreDown = await generateEgressPreDownScript();
-    const aclPreDown = await generatePreDownScript(
-      wgInterface.name
-    );
+    const aclPreDown = await generatePreDownScript(wgInterface.name);
 
     // Split hook strings into arrays of commands (one per line)
-    const postUpCommands = hooks.postUp.split('\n').filter(cmd => cmd.trim());
-    const postDownCommands = hooks.postDown.split('\n').filter(cmd => cmd.trim());
+    const postUpCommands = hooks.postUp.split('\n').filter((cmd) => cmd.trim());
+    const postDownCommands = hooks.postDown
+      .split('\n')
+      .filter((cmd) => cmd.trim());
 
     // When Table=off is used, manually add routes for serverAllowedIps
     if (tableOff) {
@@ -103,11 +131,15 @@ class WireGuard {
       for (const cidr of routeCidrs) {
         const isIpv6 = cidr.includes(':');
         const ipFlag = isIpv6 ? '-6' : '-4';
-        postUpCommands.push(`ip ${ipFlag} route replace ${cidr} dev ${wgInterface.name}`);
-        postDownCommands.push(`ip ${ipFlag} route del ${cidr} dev ${wgInterface.name} 2>/dev/null || true`);
+        postUpCommands.push(
+          `ip ${ipFlag} route replace ${cidr} dev ${wgInterface.name}`
+        );
+        postDownCommands.push(
+          `ip ${ipFlag} route del ${cidr} dev ${wgInterface.name} 2>/dev/null || true`
+        );
       }
     }
-    
+
     // If ACL is enabled, remove blanket FORWARD ACCEPT rules that would bypass ACL
     if (aclEnabled) {
       const forwardAcceptPattern = /iptables.*-A FORWARD.*-[io] wg0.*-j ACCEPT/;
@@ -116,8 +148,8 @@ class WireGuard {
           // Remove the FORWARD ACCEPT rules from this command
           postUpCommands[idx] = cmd
             .split(';')
-            .map(c => c.trim())
-            .filter(c => !forwardAcceptPattern.test(c))
+            .map((c) => c.trim())
+            .filter((c) => !forwardAcceptPattern.test(c))
             .join('; ');
         }
       });
@@ -126,31 +158,33 @@ class WireGuard {
           // Remove the FORWARD ACCEPT rules from this command
           postDownCommands[idx] = cmd
             .split(';')
-            .map(c => c.trim())
-            .filter(c => !forwardAcceptPattern.test(c))
+            .map((c) => c.trim())
+            .filter((c) => !forwardAcceptPattern.test(c))
             .join('; ');
         }
       });
     }
-    
+
     // Add ACL commands
     if (aclPostUp) postUpCommands.push(aclPostUp);
-    
+
     // Add egress commands (after ACL)
     if (egressPostUp) postUpCommands.push(egressPostUp);
-    
+
     const preDownCommands = [];
     // Egress cleanup first, then ACL cleanup
     if (egressPreDown) preDownCommands.push(egressPreDown);
     if (aclPreDown) preDownCommands.push(aclPreDown);
-    preDownCommands.push(...hooks.preDown.split('\n').filter(cmd => cmd.trim()));
+    preDownCommands.push(
+      ...hooks.preDown.split('\n').filter((cmd) => cmd.trim())
+    );
 
     // Combine back to strings with newlines, filtering out empty commands
     const enhancedHooks = {
       ...hooks,
-      postUp: postUpCommands.filter(cmd => cmd.trim()).join('\n'),
-      preDown: preDownCommands.filter(cmd => cmd.trim()).join('\n'),
-      postDown: postDownCommands.filter(cmd => cmd.trim()).join('\n'),
+      postUp: postUpCommands.filter((cmd) => cmd.trim()).join('\n'),
+      preDown: preDownCommands.filter((cmd) => cmd.trim()).join('\n'),
+      postDown: postDownCommands.filter((cmd) => cmd.trim()).join('\n'),
     };
 
     const result = [];
@@ -294,24 +328,7 @@ class WireGuard {
 
   async getClientQRCodeSVG({ clientId }: { clientId: ID }) {
     const config = await this.getClientConfiguration({ clientId });
-    const ECMode = ['high', 'quartile', 'medium', 'low'] as const;
-    for (const ecc of ECMode) {
-      try {
-        return encodeQR(config, 'svg', {
-          ecc,
-          scale: 2,
-          encoding: 'byte',
-        });
-      } catch (err) {
-        if (!(err instanceof Error && err.message === 'Capacity overflow')) {
-          throw err;
-        }
-        // retry with lower ecc
-      }
-    }
-    throw new Error(
-      'Failed to generate QR code: Capacity overflow at all ECC levels'
-    );
+    return encodeQRCode(config);
   }
 
   cleanClientFilename(name: string): string {
@@ -341,7 +358,7 @@ class WireGuard {
       WG_DEBUG('New Wireguard Keys generated successfully.');
     }
 
-    if (wgInterface.h1 === 0) {
+    if (wgInterface.h1 === '0') {
       WG_DEBUG('Generating random AmneziaWG obfuscation parameters...');
       const headers = new Set<number>();
 
@@ -350,35 +367,37 @@ class WireGuard {
       }
       const [h1, h2, h3, h4] = Array.from(headers);
 
-      wgInterface.h1 = h1!;
-      wgInterface.h2 = h2!;
-      wgInterface.h3 = h3!;
-      wgInterface.h4 = h4!;
+      wgInterface.h1 = String(h1)!;
+      wgInterface.h2 = String(h2)!;
+      wgInterface.h3 = String(h3)!;
+      wgInterface.h4 = String(h4)!;
 
       Database.interfaces.update(wgInterface);
     }
 
     WG_DEBUG(`Starting Wireguard Interface ${wgInterface.name}...`);
-    
+
     // Validate client egress device assignments before starting
     try {
       await validateClientEgressDevices();
     } catch (e) {
       WG_DEBUG('Warning: Failed to validate egress devices:', e);
     }
-    
+
     // Bring up all configured exit nodes before starting main interface
     try {
       const allExitNodes = await getAllExitNodeConfigs();
-      
+
       if (allExitNodes.length > 0) {
-        WG_DEBUG(`Bringing up all exit nodes on startup: ${allExitNodes.join(', ')}`);
+        WG_DEBUG(
+          `Bringing up all exit nodes on startup: ${allExitNodes.join(', ')}`
+        );
         await bringUpExitNodes(allExitNodes);
       }
     } catch (e) {
       WG_DEBUG('Warning: Failed to bring up some exit nodes:', e);
     }
-    
+
     await this.#saveWireguardConfig(wgInterface);
     await wg.down(wgInterface.name).catch(() => {});
     await wg.up(wgInterface.name).catch((err) => {
@@ -397,6 +416,24 @@ class WireGuard {
     });
     await this.#syncWireguardConfig(wgInterface);
     WG_DEBUG(`Wireguard Interface ${wgInterface.name} started successfully.`);
+
+    // Check if firewall was enabled but iptables isn't available
+    if (wgInterface.firewallEnabled) {
+      const enableIpv6 = !WG_ENV.DISABLE_IPV6;
+      const iptablesAvailable = await firewall.isAvailable(enableIpv6);
+      if (!iptablesAvailable) {
+        const requiredTools = enableIpv6 ? 'iptables/ip6tables' : 'iptables';
+        console.warn(
+          `WARNING: Per-Client Firewall is enabled but ${requiredTools} is not available. Disabling firewall feature. Please install ${requiredTools} to use this feature.`
+        );
+        await Database.interfaces.setFirewallEnabled(false);
+        wgInterface.firewallEnabled = false; // Update local copy
+      }
+    }
+
+    WG_DEBUG('Applying firewall rules...');
+    await this.#applyFirewallRules(wgInterface);
+    WG_DEBUG('Firewall rules applied successfully.');
 
     WG_DEBUG('Starting Cron Job...');
     await this.startCronJob();

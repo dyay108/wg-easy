@@ -71,6 +71,7 @@ export const ClientUpdateSchema = schemaForType<UpdateClientType>()(
     postDown: HookSchema,
     allowedIps: AllowedIpsSchema.nullable(),
     serverAllowedIps: serverAllowedIps,
+    firewallIps: FirewallIpsSchema.nullable(),
     mtu: MtuSchema,
     jC: JcSchema,
     jMin: JminSchema,
@@ -88,6 +89,14 @@ export const ClientUpdateSchema = schemaForType<UpdateClientType>()(
     egressDevice: z.string().nullable(),
   })
 );
+
+// Focused egress-only update (used by the inline exit-node selector)
+export const ClientEgressUpdateSchema = z.object({
+  egressEnabled: z.boolean(),
+  egressDevice: z.string().nullable(),
+});
+
+export type ClientEgressUpdateType = z.infer<typeof ClientEgressUpdateSchema>;
 
 // TODO: investigate if coerce is bad
 const clientId = z.coerce.number({ message: t('zod.client.id') });

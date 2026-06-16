@@ -1,20 +1,26 @@
 # WireGuard Easy
 
-[![Build & Publish latest Image](https://github.com/wg-easy/wg-easy/actions/workflows/deploy.yml/badge.svg?branch=production)](https://github.com/wg-easy/wg-easy/actions/workflows/deploy.yml)
+[![Build & Publish latest Image](https://github.com/wg-easy/wg-easy/actions/workflows/deploy.yml/badge.svg)](https://github.com/wg-easy/wg-easy/actions/workflows/deploy.yml)
 [![Lint](https://github.com/wg-easy/wg-easy/actions/workflows/lint.yml/badge.svg?branch=master)](https://github.com/wg-easy/wg-easy/actions/workflows/lint.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/wg-easy/wg-easy)](https://github.com/wg-easy/wg-easy/stargazers)
 [![License](https://img.shields.io/github/license/wg-easy/wg-easy)](LICENSE)
 [![GitHub Release](https://img.shields.io/github/v/release/wg-easy/wg-easy)](https://github.com/wg-easy/wg-easy/releases/latest)
-[![Image Pulls](https://img.shields.io/badge/image_pulls-12M+-blue)](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy)
+[![Image Pulls](https://img.shields.io/badge/image_pulls-28M+-blue)](https://github.com/wg-easy/wg-easy/pkgs/container/wg-easy)
 
 You have found the easiest way to install & manage WireGuard on any Linux host!
 
 ## New in this branch: ACL + Egress Enhancements
 
 - **ACL Management UI**: Create allow/deny rules for peer‑to‑peer traffic with per‑rule protocols and ports.
+- **Client Groups**: Reusable groups of clients/CIDRs (plus a built‑in "All" group) usable as a rule's source or destination.
 - **Public Egress Toggle**: Enable a peer to be used for internet egress while still enforcing ACLs.
 - **Control Client Egress Use**: Allow or deny which clients can use the server (or an exit peer) for internet egress.
 - **Custom Egress Interface**: Route a client’s internet traffic through a specific interface instead of the main one.
+
+> [!NOTE]
+> Developers: see [`HANDOFF.md`](./HANDOFF.md) for architecture, the ACL
+> generation model, the migration convention, the security model, and local
+> dev/testing notes.
 
 > [!WARNING]
 > These enhancements are **not production‑ready** yet. They are new, experimental, and haven’t been fully tested in real‑world deployments.
@@ -43,6 +49,7 @@ You have found the easiest way to install & manage WireGuard on any Linux host!
 - IPv6 support
 - CIDR support
 - 2FA support
+- Per-client firewall filtering (requires iptables)
 
 > [!NOTE]
 > To better manage documentation for this project, it has its own site here: [https://wg-easy.github.io/wg-easy/latest](https://wg-easy.github.io/wg-easy/latest)
