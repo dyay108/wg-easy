@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { createDebug } from 'obug';
+import isCidr from 'is-cidr';
 import { exec } from './cmd';
 import type { AclRuleType, AclConfigType } from '#db/repositories/acl/types';
 
@@ -232,9 +233,16 @@ interface ExpandedRule {
 
 type ResolvedGroups = Map<number, { name: string; cidrs: string[] }>;
 
+/** Only emit nft elements that are valid IPv4 CIDRs/addresses. */
+function validCidrs(values: string[]): string[] {
+  return values.filter((v) => isCidr.v4(v));
+}
+
 /**
- * Resolve a rule side to a list of CIDRs: a group expands to its members,
+ * Resolve a rule side to a list of valid CIDRs: a group expands to its members,
  * a plain CIDR yields itself, and an empty/unresolvable side yields nothing.
+ * Invalid values (e.g. a stale "null") are dropped so they can never produce
+ * broken nftables rules that would fail `wg-quick` and take down the interface.
  */
 function resolveSide(
   cidr: string | null,
@@ -242,10 +250,10 @@ function resolveSide(
   groups: ResolvedGroups
 ): string[] {
   if (groupId !== null && groupId !== undefined) {
-    return groups.get(groupId)?.cidrs ?? [];
+    return validCidrs(groups.get(groupId)?.cidrs ?? []);
   }
   if (cidr) {
-    return [cidr];
+    return validCidrs([cidr]);
   }
   return [];
 }
@@ -270,6 +278,11 @@ function expandRules(
       groups
     );
     if (sources.length === 0 || dests.length === 0) {
+      ACL_DEBUG(
+        `Skipping rule ${rule.id}: unresolved/empty ${
+          sources.length === 0 ? 'source' : 'destination'
+        } (no valid CIDRs)`
+      );
       continue;
     }
 
@@ -364,6 +377,14 @@ function generateNftablesScript(
       const { elements: allPorts, hasRanges } = mergePorts(
         groupRules.map((r) => r.ports)
       );
+      // An empty element set is invalid nft and would fail the whole table;
+      // skip rules that have no usable ports (e.g. bad legacy data).
+      if (allPorts.length === 0) {
+        ACL_DEBUG(
+          `Skipping TCP/UDP rule group "${key}": no valid ports to match`
+        );
+        continue;
+      }
       const flags = hasRanges ? 'flags interval; ' : '';
 
       portSets.push(
