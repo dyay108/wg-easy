@@ -263,6 +263,14 @@ export class ClientService {
     });
   }
 
+  /** Update only a client's egress (exit-node) assignment. */
+  updateEgress(
+    id: ID,
+    data: { egressEnabled: boolean; egressDevice: string | null }
+  ) {
+    return this.#db.update(client).set(data).where(eq(client.id, id)).execute();
+  }
+
   async createFromExisting({
     name,
     enabled,
