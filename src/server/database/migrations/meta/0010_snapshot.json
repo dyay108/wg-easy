@@ -2,7 +2,7 @@
   "version": "6",
   "dialect": "sqlite",
   "id": "43e404f3-b9a6-44eb-b558-edad4db64f5e",
-  "prevId": "d41b21e2-3977-4e94-8250-d26a26678703",
+  "prevId": "189ac588-ac7d-4c9d-a473-8fe90ba20f25",
   "tables": {
     "acl_config_table": {
       "name": "acl_config_table",

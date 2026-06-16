@@ -26,29 +26,57 @@
     {
       "idx": 3,
       "version": "6",
-      "when": 1770902426367,
-      "tag": "0003_breezy_colossus",
+      "when": 1768735386029,
+      "tag": "0003_flat_sauron",
       "breakpoints": true
     },
     {
       "idx": 4,
       "version": "6",
-      "when": 1771352889394,
-      "tag": "0004_optimal_mandrill",
+      "when": 1768906700294,
+      "tag": "0004_soft_lila_cheney",
       "breakpoints": true
     },
     {
       "idx": 5,
       "version": "6",
-      "when": 1780035570366,
-      "tag": "0005_clumsy_korg",
+      "when": 1769050000000,
+      "tag": "0005_exit_node_client",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "6",
-      "when": 1781602214860,
-      "tag": "0006_eager_lockheed",
+      "when": 1769050001000,
+      "tag": "0006_acl_allow_public_egress",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1769050002000,
+      "tag": "0007_acl_exit_node_client",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1770902426367,
+      "tag": "0008_breezy_colossus",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1771352889394,
+      "tag": "0009_optimal_mandrill",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1780035570366,
+      "tag": "0010_clumsy_korg",
       "breakpoints": true
     }
   ]
