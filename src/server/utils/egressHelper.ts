@@ -8,6 +8,17 @@ const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
 const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
 const CLIENT_EXIT_NODE_PREFIX = 'client:';
 
+/**
+ * Egress device names are interpolated into a generated bash script. Only allow
+ * a strict charset (interface names and `client:<id>:<safe-name>`) so a value
+ * like `client:5:$(...)` can never reach the shell. This is the security
+ * backstop regardless of how the value was persisted.
+ */
+const SAFE_EGRESS_DEVICE = /^[A-Za-z0-9._:-]+$/;
+
+export const isSafeEgressDevice = (device: string): boolean =>
+  SAFE_EGRESS_DEVICE.test(device);
+
 const parseClientExitNodeDevice = (device: string): number | null => {
   const match = device.match(/^client:(\d+)(?::.*)?$/);
   if (!match) return null;
@@ -290,6 +301,14 @@ function groupClientsByDevice(clients: DbClient[]): Map<string, string[]> {
   for (const client of clients) {
     if (!client.enabled || !client.egressEnabled) {
       // Skip disabled clients and egress-disabled clients
+      continue;
+    }
+
+    // Never let an unsafe device name reach the generated shell script.
+    if (client.egressDevice && !isSafeEgressDevice(client.egressDevice)) {
+      EGRESS_DEBUG(
+        `Skipping client ${client.id}: unsafe egress device "${client.egressDevice}"`
+      );
       continue;
     }
 

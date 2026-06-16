@@ -24,6 +24,23 @@ function sanitize(str: string): string {
 }
 
 /**
+ * nftables comments are double-quoted strings. Group names and rule
+ * descriptions are user-controlled, so strip characters that could terminate
+ * the string or inject nft syntax (quotes, backslashes, newlines, control
+ * chars), collapse whitespace, and cap the length (nft limit is 128 bytes).
+ */
+function sanitizeComment(str: string): string {
+  return (
+    str
+      // eslint-disable-next-line no-control-regex
+      .replace(/["\\\n\r\t\x00-\x1f]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 100)
+  );
+}
+
+/**
  * Merge a set of port specs (e.g. ["1-65535", "22,80"]) into a normalized,
  * non-overlapping element list for an nftables set. nftables interval sets
  * reject overlapping/adjacent intervals, so rules sharing src+dst+proto whose
@@ -368,8 +385,11 @@ function generateNftablesScript(
 
     if (firstRule.protocol === 'icmp') {
       // ICMP doesn't use ports
+      const comment = sanitizeComment(
+        firstRule.description || `ACL rule ${firstRule.id}`
+      );
       ruleLines.push(
-        `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ip protocol icmp accept comment "${firstRule.description || 'ACL rule ' + firstRule.id}"`
+        `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ip protocol icmp accept comment "${comment}"`
       );
     } else {
       // TCP/UDP with port sets (merge overlapping ranges across rules)
@@ -391,9 +411,9 @@ function generateNftablesScript(
         `  set ${setName} { type inet_service; ${flags}elements = { ${allPorts} } }`
       );
 
-      const comments = groupRules
-        .map((r) => r.description || `Rule ${r.id}`)
-        .join(', ');
+      const comments = sanitizeComment(
+        groupRules.map((r) => r.description || `Rule ${r.id}`).join(', ')
+      );
       ruleLines.push(
         `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ${firstRule.protocol} dport @${setName} accept comment "${comments}"`
       );
