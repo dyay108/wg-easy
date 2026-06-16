@@ -14,8 +14,8 @@
         {{ $t('groups.subtitle') }}
       </p>
 
-      <!-- Groups table -->
-      <div v-if="groups.length > 0" class="overflow-x-auto">
+      <!-- Groups table (desktop) -->
+      <div v-if="groups.length > 0" class="hidden overflow-x-auto sm:block">
         <table class="w-full table-fixed border-collapse">
           <thead class="bg-gray-100 dark:bg-neutral-700">
             <tr>
@@ -79,6 +79,62 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Groups list (mobile) -->
+      <div v-if="groups.length > 0" class="space-y-3 sm:hidden">
+        <div
+          v-for="group in groups"
+          :key="`mobile-${group.id}`"
+          class="rounded-lg border border-gray-200 p-4 shadow-sm dark:border-neutral-700"
+        >
+          <div class="mb-2 flex items-start justify-between gap-2">
+            <div class="min-w-0 break-words font-medium">
+              {{ group.name }}
+              <span
+                v-if="group.kind === 'all'"
+                class="ml-1 rounded bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-neutral-600 dark:text-neutral-300"
+              >
+                {{ $t('groups.system') }}
+              </span>
+            </div>
+            <span
+              class="whitespace-nowrap text-xs text-gray-500 dark:text-neutral-400"
+            >
+              <template v-if="group.kind === 'all'">
+                {{ $t('groups.allClients') }}
+              </template>
+              <template v-else>
+                {{ group.members.length }} {{ $t('groups.members') }}
+              </template>
+            </span>
+          </div>
+          <p
+            class="mb-3 break-words text-sm text-gray-500 dark:text-neutral-400"
+          >
+            {{ group.description || '—' }}
+          </p>
+          <div
+            v-if="group.kind === 'all'"
+            class="text-sm text-gray-500 dark:text-neutral-400"
+          >
+            {{ $t('groups.locked') }}
+          </div>
+          <div v-else class="flex gap-2">
+            <button
+              class="flex-1 rounded-lg border-2 border-gray-100 px-4 py-2 text-center text-gray-700 transition hover:border-red-800 hover:bg-red-800 hover:text-white dark:border-neutral-600 dark:text-neutral-200"
+              @click="openEdit(group)"
+            >
+              {{ $t('groups.edit') }}
+            </button>
+            <button
+              class="flex-1 rounded-lg border-2 border-red-600 bg-red-600 px-4 py-2 text-center text-white transition hover:border-red-800 hover:bg-red-800 dark:border-red-500 dark:bg-red-500"
+              @click="deleteGroupConfirm(group)"
+            >
+              {{ $t('groups.delete') }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div
