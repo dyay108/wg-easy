@@ -18,7 +18,10 @@ const remember = z.boolean({ message: t('zod.user.remember') });
 
 const totpCode = z
   .string({ message: t('zod.user.totpCode') })
+  // min and max to improve error messages
   .min(6, t('zod.user.totpCode'))
+  .max(6, t('zod.user.totpCode'))
+  .regex(/^\d{6}$/, t('zod.user.totpCode'))
   .pipe(safeStringRefine);
 
 export const UserLoginSchema = z.object({
@@ -43,9 +46,8 @@ const name = z
   .pipe(safeStringRefine);
 
 const email = z
-  .string({ message: t('zod.user.email') })
-  .min(5, t('zod.user.email'))
   .email({ message: t('zod.user.emailInvalid') })
+  .min(5, t('zod.user.email'))
   .pipe(safeStringRefine)
   .nullable();
 
@@ -77,3 +79,7 @@ export const UserUpdateTotpSchema = z.union([
     currentPassword: password,
   }),
 ]);
+
+export const Verify2faSchema = z.object({
+  totpCode: totpCode,
+});
