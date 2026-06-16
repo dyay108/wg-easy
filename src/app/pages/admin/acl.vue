@@ -41,7 +41,7 @@
           >
             <option :value="null">{{ $t('acl.exitNodeClientNone') }}</option>
             <option
-              v-for="client in (clients || []).filter((c) => c.isExitNode)"
+              v-for="client in sortedClients.filter((c) => c.isExitNode)"
               :key="client.id"
               :value="client.id"
             >
