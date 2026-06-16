@@ -198,11 +198,3 @@ node -e '/* drizzle migrate against file:/tmp/x.db, then PRAGMA table_info */'
   once per page load).
 - Backend-side sorting/pagination for large client/group lists.
 - i18n: translate the new `groups.*`, `acl.*`, and `client.egress*` keys.
-
-## Git / workflow notes
-
-- Commits on this branch use the `dgit` alias (a separate git identity):
-  `alias dgit='GIT_CONFIG_GLOBAL=~/.gitconfig-dyay108 git'`. Use `dgit` for
-  commits/pushes here.
-- Remote: `git@github.com:dyay108/wg-easy.git`. PR #1 was a security review;
-  its findings are resolved in `69f800a` and `f1acedb`.
