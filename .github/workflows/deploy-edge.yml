@@ -2,6 +2,11 @@ name: Edge
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy. Leave empty to use the workflow ref."
+        required: false
+        type: string
   push:
     branches:
       - master
@@ -30,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: master
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Prepare
         run: |
@@ -127,7 +132,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=edge
+            type=raw,value=alpha,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=edge,enable=${{ github.event_name != 'workflow_dispatch' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -149,7 +155,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: master
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v6
