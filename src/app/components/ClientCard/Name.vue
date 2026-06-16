@@ -1,6 +1,6 @@
 <template>
   <div
-    class="text-sm text-gray-700 md:text-base dark:text-neutral-200"
+    class="break-all text-sm text-gray-700 md:text-base dark:text-neutral-200"
     :title="$t('client.createdOn') + $d(new Date(client.createdAt))"
   >
     <span class="border-b-2 border-t-2 border-transparent">
@@ -26,6 +26,9 @@ const props = defineProps<{
 
 const isActiveExitNode = computed(() => {
   const activeExitNodeClientId = aclConfig.value?.exitNodeClientId ?? null;
-  return activeExitNodeClientId !== null && Number(activeExitNodeClientId) === Number(props.client.id);
+  return (
+    activeExitNodeClientId !== null &&
+    Number(activeExitNodeClientId) === Number(props.client.id)
+  );
 });
 </script>

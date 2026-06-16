@@ -1,1 +1,0 @@
-ALTER TABLE `clients_table` ADD `is_exit_node` integer DEFAULT false NOT NULL;

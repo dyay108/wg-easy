@@ -1,1 +1,0 @@
-ALTER TABLE `acl_config_table` ADD `allow_public_egress` integer DEFAULT false NOT NULL;

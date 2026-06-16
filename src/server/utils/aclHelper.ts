@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises';
-import debug from 'debug';
+import { createDebug } from 'obug';
 import { exec } from './cmd';
 import type { AclRuleType, AclConfigType } from '#db/repositories/acl/types';
 
-const ACL_DEBUG = debug('ACL');
+const ACL_DEBUG = createDebug('ACL');
 const ACL_SETUP_SCRIPT = '/etc/wireguard/acl-setup.sh';
 const ACL_CLEANUP_SCRIPT = '/etc/wireguard/acl-cleanup.sh';
 const PRIVATE_IPV4_CIDRS = [
@@ -29,7 +29,7 @@ export async function applyAclRules(): Promise<void> {
   try {
     // Check if script exists
     await fs.access(ACL_SETUP_SCRIPT);
-    
+
     // Execute the script to apply rules immediately
     ACL_DEBUG('Applying ACL rules immediately');
     await exec(`bash ${ACL_SETUP_SCRIPT}`);
@@ -57,7 +57,7 @@ export async function generatePostUpScript(
   _wgSubnet: string
 ): Promise<string> {
   const config = await Database.acl.getConfig(_interfaceId);
-  
+
   if (!config.enabled) {
     ACL_DEBUG('ACL disabled, removing setup script and cleaning up rules');
     try {
@@ -76,14 +76,19 @@ export async function generatePostUpScript(
   }
 
   const rules = await Database.acl.getEnabledRules(_interfaceId);
-  
+
   let scriptContent: string;
   if (rules.length === 0) {
     ACL_DEBUG('No ACL rules found, generating default deny script');
     scriptContent = generateDefaultDenyScript(config, _interfaceId);
   } else {
     ACL_DEBUG(`Generating ACL script for ${rules.length} rules`);
-    scriptContent = generateNftablesScript(config, rules, _interfaceId, _wgSubnet);
+    scriptContent = generateNftablesScript(
+      config,
+      rules,
+      _interfaceId,
+      _wgSubnet
+    );
   }
 
   // Write script to file with shebang
@@ -98,9 +103,11 @@ export async function generatePostUpScript(
 /**
  * Generate and write the PreDown script, return command to execute it
  */
-export async function generatePreDownScript(_interfaceId: string): Promise<string> {
+export async function generatePreDownScript(
+  _interfaceId: string
+): Promise<string> {
   const config = await Database.acl.getConfig(_interfaceId);
-  
+
   if (!config.enabled) {
     ACL_DEBUG('ACL disabled, removing cleanup script if exists');
     try {
@@ -110,7 +117,7 @@ export async function generatePreDownScript(_interfaceId: string): Promise<strin
     }
     return '';
   }
-  
+
   const scriptContent = `#!/usr/bin/env bash\nset -e\n\nnft delete table ip wg_acl_v4 2>/dev/null || true`;
   await fs.writeFile(ACL_CLEANUP_SCRIPT, scriptContent, { mode: 0o755 });
   ACL_DEBUG(`Wrote ACL cleanup script to ${ACL_CLEANUP_SCRIPT}`);
@@ -122,14 +129,17 @@ export async function generatePreDownScript(_interfaceId: string): Promise<strin
 /**
  * Generate default deny-all script when no rules exist
  */
-function generateDefaultDenyScript(config: AclConfigType, interfaceId: string): string {
-    const privateSet = config.allowPublicEgress
-      ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
-      : '';
-    const publicEgressRule = config.allowPublicEgress
-      ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
-      : '';
-    return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
+function generateDefaultDenyScript(
+  config: AclConfigType,
+  interfaceId: string
+): string {
+  const privateSet = config.allowPublicEgress
+    ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
+    : '';
+  const publicEgressRule = config.allowPublicEgress
+    ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
+    : '';
+  return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
 nft -f - <<'EOF'
 table ip ${config.filterTableName} {
 ${privateSet}  chain forward {
@@ -140,7 +150,7 @@ ${privateSet}  chain forward {
 ${publicEgressRule}  }
 }
 EOF`;
-  }
+}
 
 /**
  * Generate full nftables script with port sets and rules
@@ -151,54 +161,58 @@ function generateNftablesScript(
   interfaceId: string,
   _wgSubnet: string
 ): string {
-    const portSets: string[] = [];
-    const ruleLines: string[] = [];
-    const privateSet = config.allowPublicEgress
-      ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
-      : '';
-    const publicEgressRule = config.allowPublicEgress
-      ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
-      : '';
+  const portSets: string[] = [];
+  const ruleLines: string[] = [];
+  const privateSet = config.allowPublicEgress
+    ? `  set private_ipv4 { type ipv4_addr; flags interval; elements = { ${PRIVATE_IPV4_CIDRS.join(', ')} } }\n`
+    : '';
+  const publicEgressRule = config.allowPublicEgress
+    ? `    iifname "${interfaceId}" oifname "${interfaceId}" ip daddr != @private_ipv4 accept comment "Allow public egress"\n`
+    : '';
 
-    // Group rules by src+dst+proto to create port sets
-    const rulesByGroup = new Map<string, AclRuleType[]>();
-    
-    for (const rule of rules) {
-      const key = `${rule.sourceCidr}_${rule.destinationCidr}_${rule.protocol}`;
-      const existing = rulesByGroup.get(key) || [];
-      existing.push(rule);
-      rulesByGroup.set(key, existing);
+  // Group rules by src+dst+proto to create port sets
+  const rulesByGroup = new Map<string, AclRuleType[]>();
+
+  for (const rule of rules) {
+    const key = `${rule.sourceCidr}_${rule.destinationCidr}_${rule.protocol}`;
+    const existing = rulesByGroup.get(key) || [];
+    existing.push(rule);
+    rulesByGroup.set(key, existing);
+  }
+
+  // Generate port sets and rules for each group
+  for (const [key, groupRules] of rulesByGroup.entries()) {
+    const firstRule = groupRules[0];
+    if (!firstRule) continue;
+
+    if (firstRule.protocol === 'icmp') {
+      // ICMP doesn't use ports
+      ruleLines.push(
+        `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ip protocol icmp accept comment "${firstRule.description || 'ACL rule ' + firstRule.id}"`
+      );
+    } else {
+      // TCP/UDP with port sets
+      const setName = `ports_${sanitize(key)}`;
+      const allPorts = groupRules.map((r) => r.ports).join(', ');
+
+      // Check if we have port ranges
+      const hasRanges = allPorts.includes('-');
+      const flags = hasRanges ? 'flags interval; ' : '';
+
+      portSets.push(
+        `  set ${setName} { type inet_service; ${flags}elements = { ${allPorts} } }`
+      );
+
+      const comments = groupRules
+        .map((r) => r.description || `Rule ${r.id}`)
+        .join(', ');
+      ruleLines.push(
+        `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ${firstRule.protocol} dport @${setName} accept comment "${comments}"`
+      );
     }
+  }
 
-    // Generate port sets and rules for each group
-    for (const [key, groupRules] of rulesByGroup.entries()) {
-      const firstRule = groupRules[0];
-      if (!firstRule) continue;
-      
-      if (firstRule.protocol === 'icmp') {
-        // ICMP doesn't use ports
-        ruleLines.push(
-          `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ip protocol icmp accept comment "${firstRule.description || 'ACL rule ' + firstRule.id}"`
-        );
-      } else {
-        // TCP/UDP with port sets
-        const setName = `ports_${sanitize(key)}`;
-        const allPorts = groupRules.map((r) => r.ports).join(', ');
-        
-        // Check if we have port ranges
-        const hasRanges = allPorts.includes('-');
-        const flags = hasRanges ? 'flags interval; ' : '';
-        
-        portSets.push(`  set ${setName} { type inet_service; ${flags}elements = { ${allPorts} } }`);
-        
-        const comments = groupRules.map((r) => r.description || `Rule ${r.id}`).join(', ');
-        ruleLines.push(
-          `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ${firstRule.protocol} dport @${setName} accept comment "${comments}"`
-        );
-      }
-    }
-
-    return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
+  return `nft delete table ip ${config.filterTableName} 2>/dev/null || true
 nft -f - <<'EOF'
 table ip ${config.filterTableName} {
 ${portSets.length > 0 ? portSets.join('\n') + '\n' : ''}${privateSet}  chain forward {
@@ -210,7 +224,7 @@ ${publicEgressRule}${ruleLines.join('\n')}
   }
 }
 EOF`;
-  }
+}
 
 /**
  * Validate that the generated script is safe to execute
@@ -220,11 +234,11 @@ export function validateScript(script: string): boolean {
   if (script.includes('rm -rf') || script.includes('dd if=')) {
     throw new Error('Unsafe script detected');
   }
-  
+
   // Check for proper nft syntax
   if (!script.includes('nft') && script.trim().length > 0) {
     throw new Error('Invalid script: missing nft commands');
   }
-  
+
   return true;
 }

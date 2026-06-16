@@ -34,6 +34,8 @@ export const client = sqliteTable('clients_table', {
   serverAllowedIps: text('server_allowed_ips', { mode: 'json' })
     .$type<string[]>()
     .notNull(),
+  // Firewall-enforced allowed IPs (null = use allowedIps)
+  firewallIps: text('firewall_ips', { mode: 'json' }).$type<string[] | null>(),
   persistentKeepalive: int('persistent_keepalive').notNull(),
   mtu: int().notNull(),
   jC: int('j_c'),
@@ -48,7 +50,9 @@ export const client = sqliteTable('clients_table', {
   serverEndpoint: text('server_endpoint'),
   enabled: int({ mode: 'boolean' }).notNull(),
   isExitNode: int('is_exit_node', { mode: 'boolean' }).notNull().default(false),
-  egressEnabled: int('egress_enabled', { mode: 'boolean' }).notNull().default(false),
+  egressEnabled: int('egress_enabled', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   egressDevice: text('egress_device'), // null = use interface default, else device name (e.g., 'eth0')
   createdAt: text('created_at')
     .notNull()

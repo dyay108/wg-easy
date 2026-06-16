@@ -9,7 +9,7 @@
         <div class="flex flex-grow flex-col gap-1">
           <ClientCardName :client="client" />
           <div
-            class="flex flex-col pb-1 text-xs text-gray-500 md:inline-block md:pb-0 dark:text-neutral-400"
+            class="flex flex-col text-xs text-gray-500 dark:text-neutral-400"
           >
             <div>
               <ClientCardAddress :client="client" />
@@ -20,9 +20,18 @@
           </div>
           <ClientCardOneTimeLink :client="client" />
           <ClientCardExpireDate :client="client" />
-          <div v-if="client.egressEnabled" class="mt-1 flex items-center gap-1 text-xs">
-            <span class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-              {{ client.egressDevice ? `🌐 ${client.egressDevice}` : '🌐 Default Egress' }}
+          <div
+            v-if="client.egressEnabled"
+            class="mt-1 flex items-center gap-1 text-xs"
+          >
+            <span
+              class="rounded bg-blue-100 px-2 py-0.5 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+            >
+              {{
+                client.egressDevice
+                  ? `🌐 ${client.egressDevice}`
+                  : '🌐 Default Egress'
+              }}
             </span>
           </div>
         </div>

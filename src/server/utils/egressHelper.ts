@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
-import debug from 'debug';
+import { createDebug } from 'obug';
 import { exec } from './cmd';
 
-const EGRESS_DEBUG = debug('Egress');
+const EGRESS_DEBUG = createDebug('Egress');
 const EXIT_NODES_DIR = '/etc/wireguard/exit_nodes';
 const EGRESS_SETUP_SCRIPT = '/etc/wireguard/egress-setup.sh';
 const EGRESS_CLEANUP_SCRIPT = '/etc/wireguard/egress-cleanup.sh';
@@ -72,7 +72,9 @@ export async function validateClientEgressDevices(): Promise<void> {
     EGRESS_DEBUG('Validating client egress device assignments...');
     const availableExternalDevices = await getAllExitNodeConfigs();
     const exitNodeClients = await getExitNodeClients();
-    const exitNodeClientIds = new Set(exitNodeClients.map((client) => client.id));
+    const exitNodeClientIds = new Set(
+      exitNodeClients.map((client) => client.id)
+    );
     EGRESS_DEBUG('Available devices:', availableExternalDevices);
     const clients = await Database.clients.getAll();
 
@@ -101,6 +103,7 @@ export async function validateClientEgressDevices(): Promise<void> {
               postDown: client.postDown,
               allowedIps: client.allowedIps,
               serverAllowedIps: client.serverAllowedIps,
+              firewallIps: client.firewallIps,
               mtu: client.mtu,
               jC: client.jC,
               jMin: client.jMin,
@@ -117,7 +120,9 @@ export async function validateClientEgressDevices(): Promise<void> {
               egressDevice: null,
               isExitNode: client.isExitNode,
             });
-            EGRESS_DEBUG(`Successfully disabled egress for client ${client.id}`);
+            EGRESS_DEBUG(
+              `Successfully disabled egress for client ${client.id}`
+            );
           } catch (updateError) {
             EGRESS_DEBUG(`Failed to update client ${client.id}:`, updateError);
           }
@@ -143,6 +148,7 @@ export async function validateClientEgressDevices(): Promise<void> {
             postDown: client.postDown,
             allowedIps: client.allowedIps,
             serverAllowedIps: client.serverAllowedIps,
+            firewallIps: client.firewallIps,
             mtu: client.mtu,
             jC: client.jC,
             jMin: client.jMin,
@@ -377,11 +383,7 @@ export async function generateEgressPostUpScript(
   const serverAllowedIps = new Set<string>();
   for (const client of clients) {
     for (const cidr of client.serverAllowedIps ?? []) {
-      if (
-        cidr === '0.0.0.0/0' ||
-        cidr === wgSubnet ||
-        cidr.includes(':')
-      ) {
+      if (cidr === '0.0.0.0/0' || cidr === wgSubnet || cidr.includes(':')) {
         continue;
       }
       serverAllowedIps.add(cidr);

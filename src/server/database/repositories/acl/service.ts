@@ -84,7 +84,7 @@ export class AclService {
     let config = await this.#db.query.aclConfig.findFirst({
       where: eq(aclConfig.id, interfaceId),
     });
-    
+
     // Create default config if it doesn't exist
     if (!config) {
       const result = await this.#db
@@ -98,16 +98,23 @@ export class AclService {
           defaultPolicy: 'drop',
         })
         .returning();
-      config = result[0];
+      const createdConfig = result[0];
+      if (!createdConfig) {
+        throw new Error(`Failed to create ACL config for ${interfaceId}`);
+      }
+      config = createdConfig;
     }
-    
+
     return config;
   }
 
   /**
    * Update ACL configuration
    */
-  async updateConfig(interfaceId: string, data: Omit<AclConfigUpdateType, 'id'>) {
+  async updateConfig(
+    interfaceId: string,
+    data: Omit<AclConfigUpdateType, 'id'>
+  ) {
     const result = await this.#db
       .update(aclConfig)
       .set(data)
