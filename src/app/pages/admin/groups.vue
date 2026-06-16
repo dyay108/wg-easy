@@ -175,6 +175,7 @@
                   type="text"
                   :placeholder="$t('groups.cidrPlaceholder')"
                   autocomplete="off"
+                  @input="cidrError = ''"
                   @keydown.enter.prevent="addCidr"
                 />
                 <button
@@ -186,6 +187,12 @@
                 </button>
               </div>
             </div>
+            <p
+              v-if="cidrError"
+              class="mt-1 text-sm text-red-700 dark:text-red-400"
+            >
+              {{ cidrError }}
+            </p>
           </FormGroup>
 
           <FormGroup>
@@ -247,6 +254,7 @@
 </template>
 
 <script setup lang="ts">
+import isCidr from 'is-cidr';
 import type {
   AclGroupWithMembersType,
   AclGroupMemberType,
@@ -256,6 +264,7 @@ import type { ClientType } from '#db/repositories/client/types';
 type MemberInput = Pick<AclGroupMemberType, 'clientId' | 'cidr'>;
 
 const { t: $t } = useI18n();
+const cidrError = ref('');
 
 const { data: _groups, refresh: refreshGroups } = await useFetch(
   '/api/admin/acl/groups',
@@ -332,6 +341,7 @@ function closeModal() {
   editingGroup.value = null;
   form.value = emptyForm();
   cidrInput.value = '';
+  cidrError.value = '';
 }
 
 function addClient(client: ClientType) {
@@ -345,6 +355,11 @@ function addClient(client: ClientType) {
 function addCidr() {
   const value = cidrInput.value.trim();
   if (!value) return;
+  if (isCidr(value) === 0) {
+    cidrError.value = $t('groups.invalidCidr');
+    return;
+  }
+  cidrError.value = '';
   const exists = form.value.members.some((m) => m.cidr === value);
   if (!exists) {
     form.value.members.push({ clientId: null, cidr: value });

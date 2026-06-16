@@ -481,6 +481,12 @@
               >
                 {{ getClientNameByCidr(ruleForm.sourceCidr) }}
               </p>
+              <p
+                v-if="ruleForm.sourceCidr && !isValidCidr(ruleForm.sourceCidr)"
+                class="mt-1 text-sm text-red-700 dark:text-red-400"
+              >
+                {{ $t('acl.invalidCidr') }}
+              </p>
             </div>
             <select
               v-else
@@ -543,6 +549,15 @@
                 class="mt-1 text-sm text-red-700 dark:text-red-400"
               >
                 {{ getClientNameByCidr(ruleForm.destinationCidr) }}
+              </p>
+              <p
+                v-if="
+                  ruleForm.destinationCidr &&
+                  !isValidCidr(ruleForm.destinationCidr)
+                "
+                class="mt-1 text-sm text-red-700 dark:text-red-400"
+              >
+                {{ $t('acl.invalidCidr') }}
               </p>
             </div>
             <select
@@ -676,8 +691,13 @@
 </template>
 
 <script setup lang="ts">
+import isCidr from 'is-cidr';
 import type { AclRuleType, Protocol } from '#db/repositories/acl/types';
 import type { ClientType } from '#db/repositories/client/types';
+
+function isValidCidr(value: string) {
+  return isCidr(value) !== 0;
+}
 
 const { data: _config, refresh: refreshConfig } = await useFetch(
   '/api/admin/acl/config',
@@ -759,11 +779,11 @@ const isFormValid = computed(() => {
   const sourceOk =
     ruleForm.value.sourceType === 'group'
       ? ruleForm.value.sourceGroupId !== null
-      : !!ruleForm.value.sourceCidr;
+      : isValidCidr(ruleForm.value.sourceCidr);
   const destOk =
     ruleForm.value.destinationType === 'group'
       ? ruleForm.value.destinationGroupId !== null
-      : !!ruleForm.value.destinationCidr;
+      : isValidCidr(ruleForm.value.destinationCidr);
   if (!sourceOk || !destOk) {
     return false;
   }
@@ -781,11 +801,11 @@ const validationMessage = computed(() => {
   const sourceOk =
     ruleForm.value.sourceType === 'group'
       ? ruleForm.value.sourceGroupId !== null
-      : !!ruleForm.value.sourceCidr;
+      : isValidCidr(ruleForm.value.sourceCidr);
   const destOk =
     ruleForm.value.destinationType === 'group'
       ? ruleForm.value.destinationGroupId !== null
-      : !!ruleForm.value.destinationCidr;
+      : isValidCidr(ruleForm.value.destinationCidr);
   if (!sourceOk) missing.push('Source');
   if (!destOk) missing.push('Destination');
   if (ruleForm.value.protocols.length === 0) missing.push('Protocol');

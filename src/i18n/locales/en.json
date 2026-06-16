@@ -348,6 +348,7 @@
     "noRulesHint": "Click 'Add Rule' to create your first access control rule",
     "enableRule": "Enable this rule",
     "allPorts": "All ports",
+    "invalidCidr": "Enter a valid CIDR (e.g. 10.8.0.5/32 or 10.0.0.0/24)",
     "portsHint": "Examples: 22,80,443 or 1-65535 or 8000-9000",
     "selectClient": "Select Client",
     "noClients": "No clients available",
@@ -385,6 +386,7 @@
     "cidr": "CIDR",
     "system": "System",
     "locked": "Locked",
-    "allClients": "All clients"
+    "allClients": "All clients",
+    "invalidCidr": "Enter a valid CIDR (e.g. 10.0.0.0/24 or 10.8.0.5/32)"
   }
 }
