@@ -1,6 +1,12 @@
 name: Build and Push Multi-Arch Image
 
 on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy. Leave empty to use the workflow ref."
+        required: false
+        type: string
   push:
     branches: [ "acl-implementation" ]
 
@@ -20,6 +26,8 @@ jobs:
             os: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Prepare
         run: |
@@ -98,5 +106,6 @@ jobs:
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
         run: |
-          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:test \
+          IMAGE_TAG="${{ github.event_name == 'workflow_dispatch' && 'alpha' || 'test' }}"
+          docker buildx imagetools create -t ghcr.io/${{ github.repository }}:${IMAGE_TAG} \
             $(printf 'ghcr.io/${{ github.repository }}@sha256:%s ' *)

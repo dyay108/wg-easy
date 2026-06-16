@@ -2,6 +2,11 @@ name: Development
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy. Leave empty to use the workflow ref."
+        required: false
+        type: string
 
 jobs:
   docker-build:
@@ -22,6 +27,8 @@ jobs:
           #   os: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Prepare
         run: |
@@ -118,7 +125,8 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=development
+            type=raw,value=alpha,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=development,enable=${{ github.event_name != 'workflow_dispatch' }}
 
       - name: Create manifest list and push
         working-directory: ${{ runner.temp }}/digests
@@ -139,6 +147,8 @@ jobs:
     needs: docker-merge
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v6
