@@ -130,8 +130,8 @@
 
             <ul v-if="form.members.length > 0" class="mb-3 space-y-2">
               <li
-                v-for="(member, index) in form.members"
-                :key="index"
+                v-for="member in sortedMembers"
+                :key="`${member.clientId ?? ''}-${member.cidr ?? ''}`"
                 class="flex items-center justify-between rounded border border-gray-200 px-3 py-2 dark:border-neutral-600"
               >
                 <span>
@@ -151,7 +151,7 @@
                 <button
                   type="button"
                   class="text-sm text-red-600 hover:text-red-800"
-                  @click="removeMember(index)"
+                  @click="removeMember(member)"
                 >
                   {{ $t('groups.remove') }}
                 </button>
@@ -298,6 +298,15 @@ function memberLabel(member: MemberInput): string {
   return member.cidr ?? '';
 }
 
+const sortedMembers = computed(() =>
+  [...form.value.members].sort((a, b) =>
+    memberLabel(a).localeCompare(memberLabel(b), undefined, {
+      sensitivity: 'base',
+      numeric: true,
+    })
+  )
+);
+
 function openCreate() {
   editingGroup.value = null;
   form.value = emptyForm();
@@ -343,8 +352,11 @@ function addCidr() {
   cidrInput.value = '';
 }
 
-function removeMember(index: number) {
-  form.value.members.splice(index, 1);
+function removeMember(member: MemberInput) {
+  const index = form.value.members.indexOf(member);
+  if (index !== -1) {
+    form.value.members.splice(index, 1);
+  }
 }
 
 async function submitGroup() {
