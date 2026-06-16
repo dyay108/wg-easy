@@ -20,7 +20,26 @@ const cidrValidator = z.string().refine((val) => isCidr(val) !== 0, {
   message: 'Must be a valid CIDR notation (e.g., 10.0.0.1/32 or 10.0.0.0/24)',
 });
 
-const protocolValidator = z.enum(['tcp', 'udp', 'icmp']);
+export const PROTOCOLS = ['tcp', 'udp', 'icmp'] as const;
+export type Protocol = (typeof PROTOCOLS)[number];
+
+/**
+ * A rule may target multiple protocols, stored as a comma-separated list in the
+ * `protocol` column (e.g. "tcp" or "tcp,udp"). Validates a non-empty list of
+ * unique, known protocols.
+ */
+const protocolValidator = z.string().refine(
+  (val) => {
+    const parts = val.split(',').map((p) => p.trim());
+    if (parts.length === 0 || parts.some((p) => p === '')) return false;
+    const known = parts.every((p) =>
+      (PROTOCOLS as readonly string[]).includes(p)
+    );
+    const unique = new Set(parts).size === parts.length;
+    return known && unique;
+  },
+  { message: 'Must be a comma-separated list of tcp, udp, or icmp' }
+);
 
 const portsValidator = z.string().refine(
   (val) => {

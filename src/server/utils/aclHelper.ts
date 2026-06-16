@@ -23,6 +23,58 @@ function sanitize(str: string): string {
 }
 
 /**
+ * Merge a set of port specs (e.g. ["1-65535", "22,80"]) into a normalized,
+ * non-overlapping element list for an nftables set. nftables interval sets
+ * reject overlapping/adjacent intervals, so rules sharing src+dst+proto whose
+ * ports overlap (e.g. "all ports" plus a specific port) must be coalesced.
+ */
+function mergePorts(portSpecs: string[]): {
+  elements: string;
+  hasRanges: boolean;
+} {
+  const intervals: [number, number][] = [];
+  for (const spec of portSpecs) {
+    for (const part of spec.split(',')) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      if (trimmed.includes('-')) {
+        const [a, b] = trimmed.split('-').map((p) => parseInt(p, 10));
+        if (!Number.isNaN(a) && !Number.isNaN(b)) {
+          intervals.push([Math.min(a, b), Math.max(a, b)]);
+        }
+      } else {
+        const p = parseInt(trimmed, 10);
+        if (!Number.isNaN(p)) intervals.push([p, p]);
+      }
+    }
+  }
+
+  intervals.sort((x, y) => x[0] - y[0] || x[1] - y[1]);
+
+  const merged: [number, number][] = [];
+  for (const [start, end] of intervals) {
+    const last = merged[merged.length - 1];
+    // Merge overlapping or adjacent intervals
+    if (last && start <= last[1] + 1) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+
+  let hasRanges = false;
+  const elements = merged
+    .map(([start, end]) => {
+      if (start === end) return `${start}`;
+      hasRanges = true;
+      return `${start}-${end}`;
+    })
+    .join(', ');
+
+  return { elements, hasRanges };
+}
+
+/**
  * Apply ACL rules immediately by executing the setup script
  */
 export async function applyAclRules(): Promise<void> {
@@ -229,21 +281,30 @@ function expandRules(
       ? `${baseDesc} [${tags.join(', ')}]`
       : baseDesc;
 
-    for (const sourceCidr of sources) {
-      for (const destinationCidr of dests) {
-        const key = `${sourceCidr}|${destinationCidr}|${rule.protocol}|${rule.ports}`;
-        if (seen.has(key)) {
-          continue;
+    // A rule may target several protocols (comma-separated); emit one entry per
+    // protocol so the existing per-protocol grouping / port-set logic applies.
+    const protocols = rule.protocol
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    for (const protocol of protocols) {
+      for (const sourceCidr of sources) {
+        for (const destinationCidr of dests) {
+          const key = `${sourceCidr}|${destinationCidr}|${protocol}|${rule.ports}`;
+          if (seen.has(key)) {
+            continue;
+          }
+          seen.add(key);
+          expanded.push({
+            id: rule.id,
+            sourceCidr,
+            destinationCidr,
+            protocol,
+            ports: rule.ports,
+            description,
+          });
         }
-        seen.add(key);
-        expanded.push({
-          id: rule.id,
-          sourceCidr,
-          destinationCidr,
-          protocol: rule.protocol,
-          ports: rule.ports,
-          description,
-        });
       }
     }
   }
@@ -290,12 +351,11 @@ function generateNftablesScript(
         `    iifname "${interfaceId}" oifname "${interfaceId}" ip saddr ${firstRule.sourceCidr} ip daddr ${firstRule.destinationCidr} ip protocol icmp accept comment "${firstRule.description || 'ACL rule ' + firstRule.id}"`
       );
     } else {
-      // TCP/UDP with port sets
+      // TCP/UDP with port sets (merge overlapping ranges across rules)
       const setName = `ports_${sanitize(key)}`;
-      const allPorts = groupRules.map((r) => r.ports).join(', ');
-
-      // Check if we have port ranges
-      const hasRanges = allPorts.includes('-');
+      const { elements: allPorts, hasRanges } = mergePorts(
+        groupRules.map((r) => r.ports)
+      );
       const flags = hasRanges ? 'flags interval; ' : '';
 
       portSets.push(

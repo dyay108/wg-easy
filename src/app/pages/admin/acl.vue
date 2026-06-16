@@ -168,7 +168,7 @@
                       <span
                         class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold dark:bg-neutral-600"
                       >
-                        {{ rule.protocol.toUpperCase() }}
+                        {{ protocolLabel(rule) }}
                       </span>
                     </TooltipTrigger>
                     <TooltipPortal>
@@ -176,7 +176,7 @@
                         class="z-[9999] min-w-[8rem] max-w-[16rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
-                        {{ rule.protocol.toUpperCase() }}
+                        {{ protocolLabel(rule) }}
                         <TooltipArrow class="fill-gray-600" :width="8" />
                       </TooltipContent>
                     </TooltipPortal>
@@ -261,7 +261,7 @@
             <span
               class="rounded bg-gray-200 px-2 py-1 text-xs font-semibold dark:bg-neutral-600"
             >
-              {{ rule.protocol.toUpperCase() }}
+              {{ protocolLabel(rule) }}
             </span>
             <span v-if="rule.enabled" class="text-green-600">✓</span>
             <span v-else class="text-red-600">✗</span>
@@ -560,23 +560,34 @@
           </FormGroup>
           <FormGroup>
             <label
-              for="protocol"
               class="mb-2 block text-sm font-medium text-gray-700 dark:text-neutral-300"
               >{{ $t('acl.protocol') }}</label
             >
-            <select
-              id="protocol"
-              v-model="ruleForm.protocol"
-              class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
-              required
-            >
-              <option value="tcp">TCP</option>
-              <option value="udp">UDP</option>
-              <option value="icmp">ICMP</option>
-            </select>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="proto in PROTOCOL_OPTIONS"
+                :key="proto"
+                type="button"
+                :class="toggleBtnClass(ruleForm.protocols.includes(proto))"
+                @click="toggleProtocol(proto)"
+              >
+                {{ proto.toUpperCase() }}
+              </button>
+            </div>
           </FormGroup>
-          <FormGroup v-if="ruleForm.protocol !== 'icmp'">
+          <FormGroup v-if="!icmpOnly">
+            <label class="mb-2 flex items-center gap-2">
+              <input
+                v-model="ruleForm.allPorts"
+                type="checkbox"
+                class="rounded border-gray-300 text-red-800 focus:ring-red-800"
+              />
+              <span class="text-sm text-gray-700 dark:text-neutral-300">{{
+                $t('acl.allPorts')
+              }}</span>
+            </label>
             <FormTextField
+              v-if="!ruleForm.allPorts"
               id="ports"
               v-model="ruleForm.ports"
               :label="$t('acl.ports')"
@@ -665,7 +676,7 @@
 </template>
 
 <script setup lang="ts">
-import type { AclRuleType } from '#db/repositories/acl/types';
+import type { AclRuleType, Protocol } from '#db/repositories/acl/types';
 import type { ClientType } from '#db/repositories/client/types';
 
 const { data: _config, refresh: refreshConfig } = await useFetch(
@@ -714,11 +725,35 @@ const ruleForm = ref({
   destinationType: 'cidr' as SideType,
   destinationCidr: '',
   destinationGroupId: null as number | null,
-  protocol: 'tcp' as 'tcp' | 'udp' | 'icmp',
+  protocols: ['tcp'] as Protocol[],
+  allPorts: false,
   ports: '',
   description: '',
   enabled: true,
 });
+
+const PROTOCOL_OPTIONS: Protocol[] = ['tcp', 'udp', 'icmp'];
+const ALL_PORTS = '1-65535';
+
+/** True when ICMP is the only selected protocol (ports are irrelevant) */
+const icmpOnly = computed(
+  () =>
+    ruleForm.value.protocols.length === 1 &&
+    ruleForm.value.protocols[0] === 'icmp'
+);
+
+/** Ports input is needed only for TCP/UDP and when not using "all ports" */
+const portsNeeded = computed(() => !icmpOnly.value && !ruleForm.value.allPorts);
+
+function toggleProtocol(protocol: Protocol) {
+  const list = ruleForm.value.protocols;
+  const idx = list.indexOf(protocol);
+  if (idx === -1) {
+    list.push(protocol);
+  } else if (list.length > 1) {
+    list.splice(idx, 1);
+  }
+}
 
 const isFormValid = computed(() => {
   const sourceOk =
@@ -732,7 +767,10 @@ const isFormValid = computed(() => {
   if (!sourceOk || !destOk) {
     return false;
   }
-  if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports) {
+  if (ruleForm.value.protocols.length === 0) {
+    return false;
+  }
+  if (portsNeeded.value && !ruleForm.value.ports) {
     return false;
   }
   return true;
@@ -750,8 +788,8 @@ const validationMessage = computed(() => {
       : !!ruleForm.value.destinationCidr;
   if (!sourceOk) missing.push('Source');
   if (!destOk) missing.push('Destination');
-  if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports)
-    missing.push('Ports');
+  if (ruleForm.value.protocols.length === 0) missing.push('Protocol');
+  if (portsNeeded.value && !ruleForm.value.ports) missing.push('Ports');
   return `Please fill in: ${missing.join(', ')}`;
 });
 
@@ -799,6 +837,14 @@ function sideValue(rule: AclRuleType, side: 'source' | 'destination') {
   }
   const cidr = side === 'source' ? rule.sourceCidr : rule.destinationCidr;
   return cidr ?? '';
+}
+
+/** Display label for a rule's protocol(s), e.g. "TCP, UDP" */
+function protocolLabel(rule: AclRuleType) {
+  return rule.protocol
+    .split(',')
+    .map((p) => p.trim().toUpperCase())
+    .join(', ');
 }
 
 /** Tooltip text for a rule side */
@@ -861,11 +907,12 @@ async function submitRule() {
   }
 
   const f = ruleForm.value;
+  // Ports only apply to TCP/UDP; "all ports" maps to the full range.
+  const ports = icmpOnly.value ? '' : f.allPorts ? ALL_PORTS : f.ports;
   const data: Record<string, unknown> = {
     interfaceId: f.interfaceId,
-    protocol: f.protocol,
-    // Clear ports for ICMP
-    ports: f.protocol === 'icmp' ? '' : f.ports,
+    protocol: f.protocols.join(','),
+    ports,
     description: f.description || undefined,
     enabled: f.enabled,
   };
@@ -937,8 +984,9 @@ function editRule(rule: AclRuleType) {
     destinationType: rule.destinationGroupId !== null ? 'group' : 'cidr',
     destinationCidr: rule.destinationCidr ?? '',
     destinationGroupId: rule.destinationGroupId,
-    protocol: rule.protocol as 'tcp' | 'udp' | 'icmp',
-    ports: rule.ports,
+    protocols: rule.protocol.split(',').map((p) => p.trim()) as Protocol[],
+    allPorts: rule.ports === ALL_PORTS,
+    ports: rule.ports === ALL_PORTS ? '' : rule.ports,
     description: rule.description || '',
     enabled: rule.enabled,
   };
@@ -969,7 +1017,8 @@ function closeModal() {
     destinationType: 'cidr',
     destinationCidr: '',
     destinationGroupId: null,
-    protocol: 'tcp',
+    protocols: ['tcp'],
+    allPorts: false,
     ports: '',
     description: '',
     enabled: true,
