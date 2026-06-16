@@ -20,8 +20,9 @@
           </div>
           <ClientCardOneTimeLink :client="client" />
           <ClientCardExpireDate :client="client" />
+          <ClientCardExitNode v-if="isAdmin" :client="client" />
           <div
-            v-if="client.egressEnabled"
+            v-else-if="client.egressEnabled"
             class="mt-1 flex items-center gap-1 text-xs"
           >
             <span
@@ -62,4 +63,10 @@
 defineProps<{
   client: LocalClient;
 }>();
+
+const authStore = useAuthStore();
+const isAdmin = computed(
+  () =>
+    !!authStore.userData && hasPermissions(authStore.userData, 'admin', 'any')
+);
 </script>

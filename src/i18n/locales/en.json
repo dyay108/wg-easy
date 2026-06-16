@@ -8,7 +8,8 @@
       "config": "Config",
       "interface": "Interface",
       "hooks": "Hooks",
-      "acl": "Access Control"
+      "acl": "Access Control",
+      "groups": "Groups"
     }
   },
   "user": {
@@ -139,6 +140,8 @@
     "egressEnabled": "Enable Egress Routing",
     "egressEnabledDesc": "Route this client's internet traffic through a custom exit node",
     "egressDevice": "Exit Node Device",
+    "egressOff": "No Egress",
+    "egressUpdated": "Exit node updated",
     "egressDeviceDefault": "(Default - Use Interface Device)",
     "egressDeviceDesc": "Select which WireGuard exit node to route internet traffic through. Default uses the interface's configured device (e.g., eth0). Exit nodes must be placed in /etc/wireguard/exit_nodes/ directory.",
     "isExitNode": "Allow as Exit Node",
@@ -344,8 +347,46 @@
     "noRules": "No ACL rules configured",
     "noRulesHint": "Click 'Add Rule' to create your first access control rule",
     "enableRule": "Enable this rule",
+    "allPorts": "All ports",
+    "invalidCidr": "Enter a valid CIDR (e.g. 10.8.0.5/32 or 10.0.0.0/24)",
     "portsHint": "Examples: 22,80,443 or 1-65535 or 8000-9000",
     "selectClient": "Select Client",
-    "noClients": "No clients available"
+    "noClients": "No clients available",
+    "sourceType": "Source type",
+    "destinationType": "Destination type",
+    "typeCidr": "CIDR",
+    "typeGroup": "Group",
+    "selectGroup": "Select a group",
+    "noGroups": "No groups available"
+  },
+  "groups": {
+    "title": "Client Groups",
+    "subtitle": "Group clients and CIDRs so a single ACL rule can target many peers at once.",
+    "addGroup": "Add Group",
+    "createGroup": "Create Group",
+    "editGroup": "Edit Group",
+    "name": "Name",
+    "namePlaceholder": "Engineering",
+    "description": "Description",
+    "descriptionPlaceholder": "Optional description",
+    "members": "Members",
+    "memberCount": "Members",
+    "actions": "Actions",
+    "edit": "Edit",
+    "delete": "Delete",
+    "addClient": "Add Client",
+    "addCidr": "Add CIDR",
+    "cidrPlaceholder": "10.8.0.0/24",
+    "remove": "Remove",
+    "noMembers": "No members yet",
+    "noGroups": "No groups configured",
+    "noGroupsHint": "Click 'Add Group' to create your first client group",
+    "deleteConfirm": "Delete this group?",
+    "client": "Client",
+    "cidr": "CIDR",
+    "system": "System",
+    "locked": "Locked",
+    "allClients": "All clients",
+    "invalidCidr": "Enter a valid CIDR (e.g. 10.0.0.0/24 or 10.8.0.5/32)"
   }
 }
