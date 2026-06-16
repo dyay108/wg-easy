@@ -12,6 +12,13 @@ export const aclGroup = sqliteTable('acl_group_table', {
       onUpdate: 'cascade',
     }),
   name: text('name').notNull(),
+  /**
+   * 'static' = user-managed members; 'all' = protected system group that
+   * resolves to the whole interface subnet (every client).
+   */
+  kind: text('kind', { enum: ['static', 'all'] })
+    .notNull()
+    .default('static'),
   description: text('description'),
   createdAt: text('created_at')
     .notNull()

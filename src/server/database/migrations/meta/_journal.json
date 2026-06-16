@@ -85,6 +85,13 @@
       "when": 1780035571000,
       "tag": "0011_acl_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1780035572000,
+      "tag": "0012_acl_all_group",
+      "breakpoints": true
     }
   ]
 }

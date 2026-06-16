@@ -39,26 +39,42 @@
             >
               <td class="border p-2 text-center font-medium">
                 {{ group.name }}
+                <span
+                  v-if="group.kind === 'all'"
+                  class="ml-1 rounded bg-gray-200 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-neutral-600 dark:text-neutral-300"
+                >
+                  {{ $t('groups.system') }}
+                </span>
               </td>
               <td class="truncate border p-2 text-center">
                 {{ group.description || '—' }}
               </td>
               <td class="border p-2 text-center">
-                {{ group.members.length }}
+                <span v-if="group.kind === 'all'">{{
+                  $t('groups.allClients')
+                }}</span>
+                <span v-else>{{ group.members.length }}</span>
               </td>
               <td class="whitespace-nowrap border p-2 text-center">
-                <button
-                  class="mr-2 inline-flex items-center rounded-lg border-2 border-gray-100 px-4 py-2 text-gray-700 transition hover:border-red-800 hover:bg-red-800 hover:text-white dark:border-neutral-600 dark:text-neutral-200"
-                  @click="openEdit(group)"
-                >
-                  {{ $t('groups.edit') }}
-                </button>
-                <button
-                  class="inline-flex items-center rounded-lg border-2 border-red-600 bg-red-600 px-4 py-2 text-white transition hover:border-red-800 hover:bg-red-800 dark:border-red-500 dark:bg-red-500"
-                  @click="deleteGroupConfirm(group)"
-                >
-                  {{ $t('groups.delete') }}
-                </button>
+                <template v-if="group.kind === 'all'">
+                  <span class="text-sm text-gray-500 dark:text-neutral-400">{{
+                    $t('groups.locked')
+                  }}</span>
+                </template>
+                <template v-else>
+                  <button
+                    class="mr-2 inline-flex items-center rounded-lg border-2 border-gray-100 px-4 py-2 text-gray-700 transition hover:border-red-800 hover:bg-red-800 hover:text-white dark:border-neutral-600 dark:text-neutral-200"
+                    @click="openEdit(group)"
+                  >
+                    {{ $t('groups.edit') }}
+                  </button>
+                  <button
+                    class="inline-flex items-center rounded-lg border-2 border-red-600 bg-red-600 px-4 py-2 text-white transition hover:border-red-800 hover:bg-red-800 dark:border-red-500 dark:bg-red-500"
+                    @click="deleteGroupConfirm(group)"
+                  >
+                    {{ $t('groups.delete') }}
+                  </button>
+                </template>
               </td>
             </tr>
           </tbody>

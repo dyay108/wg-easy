@@ -17,7 +17,15 @@ export default definePermissionEventHandler(
       validateZod(AclGroupUpdateSchema, event)
     );
 
-    const group = await Database.acl.updateGroup(Number(groupId), data);
+    let group;
+    try {
+      group = await Database.acl.updateGroup(Number(groupId), data);
+    } catch (e) {
+      throw createError({
+        statusCode: 400,
+        message: e instanceof Error ? e.message : 'Failed to update group',
+      });
+    }
     await WireGuard.saveConfig();
 
     return group;

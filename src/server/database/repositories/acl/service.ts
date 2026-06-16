@@ -146,10 +146,11 @@ export class AclService {
    * Get all groups for an interface, each with its members
    */
   async getGroups(interfaceId: string) {
+    // 'all' sorts before 'static', so the system "All" group appears first.
     return this.#db.query.aclGroup.findMany({
       where: eq(aclGroup.interfaceId, interfaceId),
       with: { members: true },
-      orderBy: (groups, { asc }) => [asc(groups.name)],
+      orderBy: (groups, { asc }) => [asc(groups.kind), asc(groups.name)],
     });
   }
 
@@ -203,6 +204,10 @@ export class AclService {
    * Update a group and replace its member set
    */
   async updateGroup(id: number, data: AclGroupUpdateType) {
+    const existing = await this.getGroup(id);
+    if (existing.kind === 'all') {
+      throw new Error('The system "All" group cannot be edited.');
+    }
     return this.#db.transaction(async (tx) => {
       const result = await tx
         .update(aclGroup)
@@ -233,6 +238,11 @@ export class AclService {
    * Delete a group. Refuses if any rule still references it.
    */
   async deleteGroup(id: number) {
+    const existing = await this.getGroup(id);
+    if (existing.kind === 'all') {
+      throw new Error('The system "All" group cannot be deleted.');
+    }
+
     const referencing = await this.#db.query.aclRule.findFirst({
       where: or(
         eq(aclRule.sourceGroupId, id),
@@ -257,10 +267,11 @@ export class AclService {
 
   /**
    * Resolve each group's members to a list of CIDRs for script generation.
-   * Client members resolve to their IPv4 /32; manual CIDR members pass through.
+   * Client members resolve to their IPv4 /32; manual CIDR members pass through;
+   * the system "All" group resolves to the interface subnet (`subnetCidr`).
    * Returns a map of groupId -> { name, cidrs } (name is used in nft comments).
    */
-  async resolveGroupMembers(interfaceId: string) {
+  async resolveGroupMembers(interfaceId: string, subnetCidr?: string) {
     const groups = await this.getGroups(interfaceId);
 
     const clientIds = new Set<number>();
@@ -284,6 +295,14 @@ export class AclService {
 
     const resolved = new Map<number, { name: string; cidrs: string[] }>();
     for (const group of groups) {
+      // The system "All" group resolves to the whole interface subnet.
+      if (group.kind === 'all') {
+        resolved.set(group.id, {
+          name: group.name,
+          cidrs: subnetCidr ? [subnetCidr] : [],
+        });
+        continue;
+      }
       const cidrs: string[] = [];
       for (const member of group.members) {
         if (member.clientId !== null) {

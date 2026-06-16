@@ -39,7 +39,12 @@ function mergePorts(portSpecs: string[]): {
       if (!trimmed) continue;
       if (trimmed.includes('-')) {
         const [a, b] = trimmed.split('-').map((p) => parseInt(p, 10));
-        if (!Number.isNaN(a) && !Number.isNaN(b)) {
+        if (
+          a !== undefined &&
+          b !== undefined &&
+          !Number.isNaN(a) &&
+          !Number.isNaN(b)
+        ) {
           intervals.push([Math.min(a, b), Math.max(a, b)]);
         }
       } else {
@@ -128,7 +133,10 @@ export async function generatePostUpScript(
   }
 
   const rules = await Database.acl.getEnabledRules(_interfaceId);
-  const groupMembers = await Database.acl.resolveGroupMembers(_interfaceId);
+  const groupMembers = await Database.acl.resolveGroupMembers(
+    _interfaceId,
+    _wgSubnet
+  );
 
   // Expand group-backed rule sides into concrete CIDR pairs
   const expandedRules = expandRules(rules, groupMembers);

@@ -380,6 +380,9 @@
     "noGroupsHint": "Click 'Add Group' to create your first client group",
     "deleteConfirm": "Delete this group?",
     "client": "Client",
-    "cidr": "CIDR"
+    "cidr": "CIDR",
+    "system": "System",
+    "locked": "Locked",
+    "allClients": "All clients"
   }
 }
