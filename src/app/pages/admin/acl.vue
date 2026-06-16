@@ -637,7 +637,7 @@
         </h3>
         <div v-if="clients && clients.length > 0" class="space-y-2">
           <button
-            v-for="client in clients"
+            v-for="client in sortedClients"
             :key="client.id"
             type="button"
             class="w-full rounded border p-3 text-left transition hover:border-red-200 hover:bg-red-50 dark:border-neutral-700 dark:hover:border-red-800 dark:hover:bg-neutral-700"
@@ -687,6 +687,12 @@ const rules = toRef(_rules.value);
 const { data: clients } = await useFetch<ClientType[]>('/api/client', {
   method: 'get',
 });
+
+const sortedClients = computed(() =>
+  [...(clients.value ?? [])].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+  )
+);
 
 const { data: aclGroups } = await useFetch('/api/admin/acl/groups', {
   method: 'get',
