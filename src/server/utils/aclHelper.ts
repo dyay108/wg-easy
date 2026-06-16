@@ -76,16 +76,22 @@ export async function generatePostUpScript(
   }
 
   const rules = await Database.acl.getEnabledRules(_interfaceId);
+  const groupMembers = await Database.acl.resolveGroupMembers(_interfaceId);
+
+  // Expand group-backed rule sides into concrete CIDR pairs
+  const expandedRules = expandRules(rules, groupMembers);
 
   let scriptContent: string;
-  if (rules.length === 0) {
-    ACL_DEBUG('No ACL rules found, generating default deny script');
+  if (expandedRules.length === 0) {
+    ACL_DEBUG('No effective ACL rules found, generating default deny script');
     scriptContent = generateDefaultDenyScript(config, _interfaceId);
   } else {
-    ACL_DEBUG(`Generating ACL script for ${rules.length} rules`);
+    ACL_DEBUG(
+      `Generating ACL script for ${expandedRules.length} expanded rule(s)`
+    );
     scriptContent = generateNftablesScript(
       config,
-      rules,
+      expandedRules,
       _interfaceId,
       _wgSubnet
     );
@@ -153,11 +159,104 @@ EOF`;
 }
 
 /**
+ * A rule whose source/destination are concrete CIDRs (groups already expanded)
+ */
+interface ExpandedRule {
+  id: number;
+  sourceCidr: string;
+  destinationCidr: string;
+  protocol: string;
+  ports: string;
+  description: string;
+}
+
+type ResolvedGroups = Map<number, { name: string; cidrs: string[] }>;
+
+/**
+ * Resolve a rule side to a list of CIDRs: a group expands to its members,
+ * a plain CIDR yields itself, and an empty/unresolvable side yields nothing.
+ */
+function resolveSide(
+  cidr: string | null,
+  groupId: number | null,
+  groups: ResolvedGroups
+): string[] {
+  if (groupId !== null && groupId !== undefined) {
+    return groups.get(groupId)?.cidrs ?? [];
+  }
+  if (cidr) {
+    return [cidr];
+  }
+  return [];
+}
+
+/**
+ * Expand each rule into concrete source/destination CIDR pairs (cartesian
+ * product of both sides), deduping identical (src, dst, proto, ports) entries.
+ * A rule referencing an empty group produces no entries (denied by default).
+ */
+function expandRules(
+  rules: AclRuleType[],
+  groups: ResolvedGroups
+): ExpandedRule[] {
+  const expanded: ExpandedRule[] = [];
+  const seen = new Set<string>();
+
+  for (const rule of rules) {
+    const sources = resolveSide(rule.sourceCidr, rule.sourceGroupId, groups);
+    const dests = resolveSide(
+      rule.destinationCidr,
+      rule.destinationGroupId,
+      groups
+    );
+    if (sources.length === 0 || dests.length === 0) {
+      continue;
+    }
+
+    const srcGroupName =
+      rule.sourceGroupId !== null
+        ? groups.get(rule.sourceGroupId)?.name
+        : undefined;
+    const dstGroupName =
+      rule.destinationGroupId !== null
+        ? groups.get(rule.destinationGroupId)?.name
+        : undefined;
+    const baseDesc = rule.description || `Rule ${rule.id}`;
+    const tags: string[] = [];
+    if (srcGroupName) tags.push(`src:${srcGroupName}`);
+    if (dstGroupName) tags.push(`dst:${dstGroupName}`);
+    const description = tags.length
+      ? `${baseDesc} [${tags.join(', ')}]`
+      : baseDesc;
+
+    for (const sourceCidr of sources) {
+      for (const destinationCidr of dests) {
+        const key = `${sourceCidr}|${destinationCidr}|${rule.protocol}|${rule.ports}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        expanded.push({
+          id: rule.id,
+          sourceCidr,
+          destinationCidr,
+          protocol: rule.protocol,
+          ports: rule.ports,
+          description,
+        });
+      }
+    }
+  }
+
+  return expanded;
+}
+
+/**
  * Generate full nftables script with port sets and rules
  */
 function generateNftablesScript(
   config: AclConfigType,
-  rules: AclRuleType[],
+  rules: ExpandedRule[],
   interfaceId: string,
   _wgSubnet: string
 ): string {
@@ -171,7 +270,7 @@ function generateNftablesScript(
     : '';
 
   // Group rules by src+dst+proto to create port sets
-  const rulesByGroup = new Map<string, AclRuleType[]>();
+  const rulesByGroup = new Map<string, ExpandedRule[]>();
 
   for (const rule of rules) {
     const key = `${rule.sourceCidr}_${rule.destinationCidr}_${rule.protocol}`;

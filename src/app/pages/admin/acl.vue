@@ -111,13 +111,13 @@
                     <TooltipTrigger as-child>
                       <div class="w-full">
                         <span
-                          v-if="getClientNameByCidr(rule.sourceCidr)"
+                          v-if="sideBadge(rule, 'source')"
                           class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
                         >
-                          {{ getClientNameByCidr(rule.sourceCidr) }}
+                          {{ sideBadge(rule, 'source') }}
                         </span>
                         <span v-else class="block truncate font-mono text-sm">
-                          {{ rule.sourceCidr }}
+                          {{ sideValue(rule, 'source') }}
                         </span>
                       </div>
                     </TooltipTrigger>
@@ -126,11 +126,7 @@
                         class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
-                        {{
-                          getClientNameByCidr(rule.sourceCidr)
-                            ? `${getClientNameByCidr(rule.sourceCidr)} (${rule.sourceCidr})`
-                            : rule.sourceCidr
-                        }}
+                        {{ sideTooltip(rule, 'source') }}
                         <TooltipArrow class="fill-gray-600" :width="8" />
                       </TooltipContent>
                     </TooltipPortal>
@@ -143,13 +139,13 @@
                     <TooltipTrigger as-child>
                       <div class="w-full">
                         <span
-                          v-if="getClientNameByCidr(rule.destinationCidr)"
+                          v-if="sideBadge(rule, 'destination')"
                           class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
                         >
-                          {{ getClientNameByCidr(rule.destinationCidr) }}
+                          {{ sideBadge(rule, 'destination') }}
                         </span>
                         <span v-else class="block truncate font-mono text-sm">
-                          {{ rule.destinationCidr }}
+                          {{ sideValue(rule, 'destination') }}
                         </span>
                       </div>
                     </TooltipTrigger>
@@ -158,11 +154,7 @@
                         class="z-[9999] min-w-[16rem] max-w-[32rem] select-none whitespace-pre-wrap break-words rounded bg-gray-600 px-3 py-2 text-center text-sm leading-relaxed text-white shadow-lg will-change-[transform,opacity]"
                         :side-offset="5"
                       >
-                        {{
-                          getClientNameByCidr(rule.destinationCidr)
-                            ? `${getClientNameByCidr(rule.destinationCidr)} (${rule.destinationCidr})`
-                            : rule.destinationCidr
-                        }}
+                        {{ sideTooltip(rule, 'destination') }}
                         <TooltipArrow class="fill-gray-600" :width="8" />
                       </TooltipContent>
                     </TooltipPortal>
@@ -289,22 +281,22 @@
                     style="list-style: none"
                   >
                     <span
-                      v-if="getClientNameByCidr(rule.sourceCidr)"
+                      v-if="sideBadge(rule, 'source')"
                       class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
                     >
-                      {{ getClientNameByCidr(rule.sourceCidr) }}
+                      {{ sideBadge(rule, 'source') }}
                     </span>
                     <span
                       v-else
                       class="block max-w-full truncate font-mono text-sm"
                     >
-                      {{ rule.sourceCidr }}
+                      {{ sideValue(rule, 'source') }}
                     </span>
                   </summary>
                   <div
                     class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400"
                   >
-                    {{ rule.sourceCidr }}
+                    {{ sideTooltip(rule, 'source') }}
                   </div>
                 </details>
               </div>
@@ -323,22 +315,22 @@
                     style="list-style: none"
                   >
                     <span
-                      v-if="getClientNameByCidr(rule.destinationCidr)"
+                      v-if="sideBadge(rule, 'destination')"
                       class="inline-block max-w-full truncate rounded bg-gray-200 px-2 py-1 text-xs font-semibold text-white dark:bg-neutral-600"
                     >
-                      {{ getClientNameByCidr(rule.destinationCidr) }}
+                      {{ sideBadge(rule, 'destination') }}
                     </span>
                     <span
                       v-else
                       class="block max-w-full truncate font-mono text-sm"
                     >
-                      {{ rule.destinationCidr }}
+                      {{ sideValue(rule, 'destination') }}
                     </span>
                   </summary>
                   <div
                     class="mt-1 break-words text-xs text-gray-500 dark:text-neutral-400"
                   >
-                    {{ rule.destinationCidr }}
+                    {{ sideTooltip(rule, 'destination') }}
                   </div>
                 </details>
               </div>
@@ -447,31 +439,61 @@
             >
               {{ $t('acl.source') }}
             </label>
-            <div class="relative">
-              <BaseInput
-                id="sourceCidr"
-                v-model.trim="ruleForm.sourceCidr"
-                name="sourceCidr"
-                type="text"
-                placeholder="10.8.0.2/32"
-                autocomplete="off"
-                style="padding-right: 8rem"
-                required
-              />
+            <div class="mb-2 flex gap-2">
               <button
                 type="button"
-                class="absolute bottom-1 right-2 top-1 ml-2 rounded bg-gray-100 px-3 text-xs transition hover:bg-red-800 hover:text-white dark:bg-neutral-600 dark:text-neutral-300 dark:hover:bg-red-800 dark:hover:text-white"
-                @click="showSourceClientPicker = true"
+                :class="toggleBtnClass(ruleForm.sourceType === 'cidr')"
+                @click="ruleForm.sourceType = 'cidr'"
               >
-                {{ $t('acl.selectClient') }}
+                {{ $t('acl.typeCidr') }}
+              </button>
+              <button
+                type="button"
+                :class="toggleBtnClass(ruleForm.sourceType === 'group')"
+                @click="ruleForm.sourceType = 'group'"
+              >
+                {{ $t('acl.typeGroup') }}
               </button>
             </div>
-            <p
-              v-if="getClientNameByCidr(ruleForm.sourceCidr)"
-              class="mt-1 text-sm text-red-700 dark:text-red-400"
+            <div v-if="ruleForm.sourceType === 'cidr'">
+              <div class="relative">
+                <BaseInput
+                  id="sourceCidr"
+                  v-model.trim="ruleForm.sourceCidr"
+                  name="sourceCidr"
+                  type="text"
+                  placeholder="10.8.0.2/32"
+                  autocomplete="off"
+                  style="padding-right: 8rem"
+                  required
+                />
+                <button
+                  type="button"
+                  class="absolute bottom-1 right-2 top-1 ml-2 rounded bg-gray-100 px-3 text-xs transition hover:bg-red-800 hover:text-white dark:bg-neutral-600 dark:text-neutral-300 dark:hover:bg-red-800 dark:hover:text-white"
+                  @click="showSourceClientPicker = true"
+                >
+                  {{ $t('acl.selectClient') }}
+                </button>
+              </div>
+              <p
+                v-if="getClientNameByCidr(ruleForm.sourceCidr)"
+                class="mt-1 text-sm text-red-700 dark:text-red-400"
+              >
+                {{ getClientNameByCidr(ruleForm.sourceCidr) }}
+              </p>
+            </div>
+            <select
+              v-else
+              v-model="ruleForm.sourceGroupId"
+              class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
             >
-              {{ getClientNameByCidr(ruleForm.sourceCidr) }}
-            </p>
+              <option :value="null" disabled>
+                {{ $t('acl.selectGroup') }}
+              </option>
+              <option v-for="g in aclGroups || []" :key="g.id" :value="g.id">
+                {{ g.name }}
+              </option>
+            </select>
           </FormGroup>
           <FormGroup>
             <label
@@ -480,31 +502,61 @@
             >
               {{ $t('acl.destination') }}
             </label>
-            <div class="relative">
-              <BaseInput
-                id="destinationCidr"
-                v-model.trim="ruleForm.destinationCidr"
-                name="destinationCidr"
-                type="text"
-                placeholder="10.8.0.3/32"
-                autocomplete="off"
-                style="padding-right: 8rem"
-                required
-              />
+            <div class="mb-2 flex gap-2">
               <button
                 type="button"
-                class="absolute bottom-1 right-2 top-1 ml-2 rounded bg-gray-100 px-3 text-xs transition hover:bg-red-800 hover:text-white dark:bg-neutral-600 dark:text-neutral-300 dark:hover:bg-red-800 dark:hover:text-white"
-                @click="showDestClientPicker = true"
+                :class="toggleBtnClass(ruleForm.destinationType === 'cidr')"
+                @click="ruleForm.destinationType = 'cidr'"
               >
-                {{ $t('acl.selectClient') }}
+                {{ $t('acl.typeCidr') }}
+              </button>
+              <button
+                type="button"
+                :class="toggleBtnClass(ruleForm.destinationType === 'group')"
+                @click="ruleForm.destinationType = 'group'"
+              >
+                {{ $t('acl.typeGroup') }}
               </button>
             </div>
-            <p
-              v-if="getClientNameByCidr(ruleForm.destinationCidr)"
-              class="mt-1 text-sm text-red-700 dark:text-red-400"
+            <div v-if="ruleForm.destinationType === 'cidr'">
+              <div class="relative">
+                <BaseInput
+                  id="destinationCidr"
+                  v-model.trim="ruleForm.destinationCidr"
+                  name="destinationCidr"
+                  type="text"
+                  placeholder="10.8.0.3/32"
+                  autocomplete="off"
+                  style="padding-right: 8rem"
+                  required
+                />
+                <button
+                  type="button"
+                  class="absolute bottom-1 right-2 top-1 ml-2 rounded bg-gray-100 px-3 text-xs transition hover:bg-red-800 hover:text-white dark:bg-neutral-600 dark:text-neutral-300 dark:hover:bg-red-800 dark:hover:text-white"
+                  @click="showDestClientPicker = true"
+                >
+                  {{ $t('acl.selectClient') }}
+                </button>
+              </div>
+              <p
+                v-if="getClientNameByCidr(ruleForm.destinationCidr)"
+                class="mt-1 text-sm text-red-700 dark:text-red-400"
+              >
+                {{ getClientNameByCidr(ruleForm.destinationCidr) }}
+              </p>
+            </div>
+            <select
+              v-else
+              v-model="ruleForm.destinationGroupId"
+              class="w-full rounded-lg border-2 border-gray-100 text-gray-500 focus:border-red-800 focus:outline-0 focus:ring-0 dark:border-neutral-800 dark:bg-neutral-700 dark:text-neutral-200"
             >
-              {{ getClientNameByCidr(ruleForm.destinationCidr) }}
-            </p>
+              <option :value="null" disabled>
+                {{ $t('acl.selectGroup') }}
+              </option>
+              <option v-for="g in aclGroups || []" :key="g.id" :value="g.id">
+                {{ g.name }}
+              </option>
+            </select>
           </FormGroup>
           <FormGroup>
             <label
@@ -636,16 +688,26 @@ const { data: clients } = await useFetch<ClientType[]>('/api/client', {
   method: 'get',
 });
 
+const { data: aclGroups } = await useFetch('/api/admin/acl/groups', {
+  method: 'get',
+});
+
 const showCreateModal = ref(false);
 const editingRule = ref<AclRuleType | null>(null);
 const showSourceClientPicker = ref(false);
 const showDestClientPicker = ref(false);
 const formElement = ref<HTMLFormElement | null>(null);
 
+type SideType = 'cidr' | 'group';
+
 const ruleForm = ref({
   interfaceId: 'wg0',
+  sourceType: 'cidr' as SideType,
   sourceCidr: '',
+  sourceGroupId: null as number | null,
+  destinationType: 'cidr' as SideType,
   destinationCidr: '',
+  destinationGroupId: null as number | null,
   protocol: 'tcp' as 'tcp' | 'udp' | 'icmp',
   ports: '',
   description: '',
@@ -653,7 +715,15 @@ const ruleForm = ref({
 });
 
 const isFormValid = computed(() => {
-  if (!ruleForm.value.sourceCidr || !ruleForm.value.destinationCidr) {
+  const sourceOk =
+    ruleForm.value.sourceType === 'group'
+      ? ruleForm.value.sourceGroupId !== null
+      : !!ruleForm.value.sourceCidr;
+  const destOk =
+    ruleForm.value.destinationType === 'group'
+      ? ruleForm.value.destinationGroupId !== null
+      : !!ruleForm.value.destinationCidr;
+  if (!sourceOk || !destOk) {
     return false;
   }
   if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports) {
@@ -664,14 +734,22 @@ const isFormValid = computed(() => {
 
 const validationMessage = computed(() => {
   const missing = [];
-  if (!ruleForm.value.sourceCidr) missing.push('Source CIDR');
-  if (!ruleForm.value.destinationCidr) missing.push('Destination CIDR');
+  const sourceOk =
+    ruleForm.value.sourceType === 'group'
+      ? ruleForm.value.sourceGroupId !== null
+      : !!ruleForm.value.sourceCidr;
+  const destOk =
+    ruleForm.value.destinationType === 'group'
+      ? ruleForm.value.destinationGroupId !== null
+      : !!ruleForm.value.destinationCidr;
+  if (!sourceOk) missing.push('Source');
+  if (!destOk) missing.push('Destination');
   if (ruleForm.value.protocol !== 'icmp' && !ruleForm.value.ports)
     missing.push('Ports');
   return `Please fill in: ${missing.join(', ')}`;
 });
 
-function getClientNameByCidr(cidr: string): string | null {
+function getClientNameByCidr(cidr: string | null): string | null {
   if (!clients.value || !cidr) return null;
 
   // Extract IP from CIDR (e.g., "10.8.0.2/32" -> "10.8.0.2")
@@ -680,6 +758,60 @@ function getClientNameByCidr(cidr: string): string | null {
   const client = clients.value.find((c) => c.ipv4Address === ip);
   return client ? client.name : null;
 }
+
+function getGroupName(groupId: number | null): string | null {
+  if (groupId === null || !aclGroups.value) return null;
+  const group = aclGroups.value.find((g) => g.id === groupId);
+  return group ? group.name : null;
+}
+
+/** True when a rule side references a group */
+function sideIsGroup(rule: AclRuleType, side: 'source' | 'destination') {
+  return (
+    (side === 'source' ? rule.sourceGroupId : rule.destinationGroupId) !== null
+  );
+}
+
+/**
+ * Badge label for a rule side: "Group: name" for groups, the client name for a
+ * client CIDR, or null for a plain CIDR (which renders the raw value instead).
+ */
+function sideBadge(rule: AclRuleType, side: 'source' | 'destination') {
+  const groupId =
+    side === 'source' ? rule.sourceGroupId : rule.destinationGroupId;
+  if (groupId !== null) {
+    return `${$t('acl.typeGroup')}: ${getGroupName(groupId) ?? groupId}`;
+  }
+  const cidr = side === 'source' ? rule.sourceCidr : rule.destinationCidr;
+  return getClientNameByCidr(cidr);
+}
+
+/** Raw value for a rule side: the CIDR, or the badge label for groups */
+function sideValue(rule: AclRuleType, side: 'source' | 'destination') {
+  if (sideIsGroup(rule, side)) {
+    return sideBadge(rule, side) ?? '';
+  }
+  const cidr = side === 'source' ? rule.sourceCidr : rule.destinationCidr;
+  return cidr ?? '';
+}
+
+/** Tooltip text for a rule side */
+function sideTooltip(rule: AclRuleType, side: 'source' | 'destination') {
+  if (sideIsGroup(rule, side)) {
+    return sideBadge(rule, side) ?? '';
+  }
+  const badge = sideBadge(rule, side);
+  const cidr = side === 'source' ? rule.sourceCidr : rule.destinationCidr;
+  return badge ? `${badge} (${cidr})` : (cidr ?? '');
+}
+
+function toggleBtnClass(active: boolean) {
+  return active
+    ? 'rounded-lg border-2 border-red-800 bg-red-800 px-3 py-1 text-sm text-white'
+    : 'rounded-lg border-2 border-gray-100 px-3 py-1 text-sm text-gray-700 hover:border-red-800 dark:border-neutral-600 dark:text-neutral-200';
+}
+
+const { t: $t } = useI18n();
 
 function selectClient(client: ClientType) {
   const cidr = `${client.ipv4Address}/32`;
@@ -722,11 +854,30 @@ async function submitRule() {
     return;
   }
 
-  const data = { ...ruleForm.value };
+  const f = ruleForm.value;
+  const data: Record<string, unknown> = {
+    interfaceId: f.interfaceId,
+    protocol: f.protocol,
+    // Clear ports for ICMP
+    ports: f.protocol === 'icmp' ? '' : f.ports,
+    description: f.description || undefined,
+    enabled: f.enabled,
+  };
 
-  // Clear ports for ICMP
-  if (data.protocol === 'icmp') {
-    data.ports = '';
+  if (f.sourceType === 'group') {
+    data.sourceGroupId = f.sourceGroupId;
+    data.sourceCidr = null;
+  } else {
+    data.sourceCidr = f.sourceCidr;
+    data.sourceGroupId = null;
+  }
+
+  if (f.destinationType === 'group') {
+    data.destinationGroupId = f.destinationGroupId;
+    data.destinationCidr = null;
+  } else {
+    data.destinationCidr = f.destinationCidr;
+    data.destinationGroupId = null;
   }
 
   try {
@@ -774,8 +925,12 @@ function editRule(rule: AclRuleType) {
   editingRule.value = rule;
   ruleForm.value = {
     interfaceId: rule.interfaceId,
-    sourceCidr: rule.sourceCidr,
-    destinationCidr: rule.destinationCidr,
+    sourceType: rule.sourceGroupId !== null ? 'group' : 'cidr',
+    sourceCidr: rule.sourceCidr ?? '',
+    sourceGroupId: rule.sourceGroupId,
+    destinationType: rule.destinationGroupId !== null ? 'group' : 'cidr',
+    destinationCidr: rule.destinationCidr ?? '',
+    destinationGroupId: rule.destinationGroupId,
     protocol: rule.protocol as 'tcp' | 'udp' | 'icmp',
     ports: rule.ports,
     description: rule.description || '',
@@ -784,7 +939,11 @@ function editRule(rule: AclRuleType) {
 }
 
 async function deleteRuleConfirm(rule: AclRuleType) {
-  if (!confirm(`Delete rule: ${rule.sourceCidr} → ${rule.destinationCidr}?`)) {
+  if (
+    !confirm(
+      `Delete rule: ${sideValue(rule, 'source')} → ${sideValue(rule, 'destination')}?`
+    )
+  ) {
     return;
   }
 
@@ -798,8 +957,12 @@ function closeModal() {
   editingRule.value = null;
   ruleForm.value = {
     interfaceId: 'wg0',
+    sourceType: 'cidr',
     sourceCidr: '',
+    sourceGroupId: null,
+    destinationType: 'cidr',
     destinationCidr: '',
+    destinationGroupId: null,
     protocol: 'tcp',
     ports: '',
     description: '',
